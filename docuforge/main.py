@@ -21,6 +21,44 @@ console = Console()
 
 # REDEFINING THE WRAPPER CORRECTLY BEFORE THE MAIN APP
 def worker_process_chunk(chunk: PDFChunk, config: AppConfig, doc_output_dir: Path) -> str:
+    # FIX: Windows User Data with Non-ASCII characters (e.g. 'göksel') breaks Camelot/Ghostscript/OpenCV
+    # We force the process to use a safe ASCII path for TEMP.
+    import os
+    import tempfile
+    from pathlib import Path
+    
+    if os.name == 'nt':
+        import ctypes
+        def get_short_path(path):
+            try:
+                buf = ctypes.create_unicode_buffer(256)
+                ret = ctypes.windll.kernel32.GetShortPathNameW(path, buf, 256)
+                if ret > 0:
+                    return buf.value
+            except:
+                pass
+            return path
+
+        current_temp = tempfile.gettempdir()
+        safe_temp = current_temp
+        
+        if not current_temp.isascii():
+            short_path = get_short_path(current_temp)
+            if short_path.isascii():
+                safe_temp = short_path
+            else:
+                public_temp = Path("C:/Users/Public/DocuForge/Temp")
+                try:
+                    public_temp.mkdir(parents=True, exist_ok=True)
+                    safe_temp = str(public_temp)
+                except Exception:
+                    pass
+                    
+        if safe_temp != current_temp and safe_temp.isascii():
+            os.environ["TEMP"] = safe_temp
+            os.environ["TMP"] = safe_temp
+            tempfile.tempdir = safe_temp
+
     import pdfplumber
     from docuforge.src.cleaning.zones import ZoneCleaner
     from docuforge.src.cleaning.artifacts import TextCleaner
@@ -212,4 +250,18 @@ def convert(
     console.print(f"[bold green]Batch Completed! Output at: {output_dir}[/bold green]")
 
 if __name__ == "__main__":
+    # PATCH: Suppress annoying Windows PermissionError on exit due to file locking
+    # This happens when background libs (Camelot/Ghostscript) hold file handles during cleanup
+    import shutil
+    import os
+    
+    if os.name == 'nt':
+        original_rmtree = shutil.rmtree
+        def safe_rmtree(path, ignore_errors=False, onerror=None):
+            try:
+                original_rmtree(path, ignore_errors=True, onerror=None)
+            except Exception:
+                pass
+        shutil.rmtree = safe_rmtree
+
     app()
