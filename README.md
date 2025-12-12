@@ -22,7 +22,7 @@ Bu araç güçlü motorlar (OCR, Tablo okuyucu) kullanır. Lütfen sırasıyla u
 
 ```powershell
 # 1. Projeyi İndirin
-git clone https://github.com/Glonrce/file-converter.git
+git clone https://github.com/glonorce/file-converter.git
 cd file-converter
 
 # 2. Sanal Ortamı (Virtual Environment) Kurun
@@ -68,6 +68,18 @@ Sihirbaz başladığında sizden **PDF Klasörü**, **Çıktı Yeri** ve **Geli�
     *   **Images:** Resimleri ayıklar (Açıksa klasör oluşturur, kapalıysa oluşturmaz).
     *   **Header Sensitivity (0.6):** Sayfa numarası/kitap adı gibi tekrarlayan metinleri silme hassasiyetidir. (0.6 = %60 tekrar ediyorsa sil).
 
+## 🧠 Geliştirme Yaklaşımı: AI Orkestrasyonu
+
+Bu proje, sadece kod yazmak değil, modern **Sistem Mühendisliği** ve **Yapay Zeka Yönetimi (AI Orchestration)** becerilerinin bir ürünüdür.
+
+*   **Mimari & Mantık (GÖKSEL ÖZKAN):** Projenin "Healer" (Dil düzeltme) algoritması, parçalama (chunking) stratejisi ve hata yönetimi mimarisi insan zekasıyla tasarlanmıştır.
+*   **Kodlama (AI):** Tasarlanan bu karmaşık mimari, AI araçları yönlendirilerek kodlanmıştır.
+
+### 👤 Proje Lideri
+**GÖKSEL ÖZKAN**
+- *System Architecture Design & AI Orchestration*
+- *Project Lead*
+
 ---
 
 # 🇬🇧 DocuForge: Intelligent PDF to Markdown Engine
@@ -87,7 +99,7 @@ Navigate to your desired folder first.
 
 ```powershell
 # 1. Clone Repository
-git clone https://github.com/Glonrce/file-converter.git
+git clone https://github.com/glonorce/file-converter.git
 cd file-converter
 
 # 2. Create Virtual Environment
@@ -132,3 +144,16 @@ The wizard will ask for your **Input Directory**, **Output Path**, and **Advance
     *   **Tables:** Extracts data tables.
     *   **Images:** Extracts embedded images (Creates folder only if found).
     *   **Header Sensitivity (0.6):** Controls removal of repeated text (headers/footers). 0.6 means "remove if present on 60% of pages".
+
+## 🧠 Development Philosophy: AI Orchestration
+
+This project demonstrates the power of **Prompt Engineering** and **System Architecture**. It is not just "AI-generated code" but a human-architected system.
+
+*   **Architecture & Logic:** The "Healer" algorithms, chunking strategies, and robust error handling were designed by the human engineer.
+*   **Implementation:** The code execution was handled by AI under strict architectural guidance.
+
+## 👤 Author / Yazar
+
+**GÖKSEL ÖZKAN**
+- *System Architecture Design & AI Orchestration*
+- *Project Lead*

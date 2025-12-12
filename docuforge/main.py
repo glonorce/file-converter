@@ -1,3 +1,7 @@
+# Copyright (c) 2025 GÖKSEL ÖZKAN
+# This software is released under the MIT License.
+# https://github.com/glonorce/file-converter
+
 import typer
 from typing import Optional, List
 from pathlib import Path
