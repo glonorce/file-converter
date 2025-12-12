@@ -1,0 +1,28 @@
+# User content
+test pdfleri/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+
+# DocuForge Specific
+output/
+logs/
+*.log
+config.yaml
+debug_pdf.py
+
+# Temp / OS
+.temp_swp/
+.DS_Store
+Thumbs.db
