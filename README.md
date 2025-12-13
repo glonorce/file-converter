@@ -53,8 +53,11 @@ Kurulum bittikten sonra aracı her çalıştırmak istediğinizde şu iki adım�
 # 1. Ortamı Hazırla (Her seferinde yapın)
 .\.venv\Scripts\Activate.ps1
 
-# 2. Aracı Başlat
-python -m docuforge.main
+# 2. Seçenek: Klasik Terminal
+python -m docuforge.main convert
+
+# 3. Seçenek: Web Arayüzü 🌐
+python -m docuforge.main web
 ```
 
 Sihirbaz başladığında sizden **PDF Klasörü**, **Çıktı Yeri** ve **Gelişmiş Seçenekler** için onay isteyecektir.
@@ -130,8 +133,11 @@ Whenever you want to run the tool, follow this simple workflow. The interactive 
 # 1. Activate Environment
 .\.venv\Scripts\Activate.ps1
 
-# 2. Start Tool
-python -m docuforge.main
+# Option 2: Classic Terminal
+python -m docuforge.main convert
+
+# Option 3: Web Interface 🌐
+python -m docuforge.main web
 ```
 
 The wizard will ask for your **Input Directory**, **Output Path**, and **Advanced Options**.

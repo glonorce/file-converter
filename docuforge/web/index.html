@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocuForge Pro • Intelligent PDF Engine</title>
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- Animated Background -->
+    <div class="bg-container">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+        <div class="grid-overlay"></div>
+    </div>
+
+    <!-- Main Interface -->
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-section">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <path d="M12 18v-6" />
+                        <path d="M9 15l3 3 3-3" />
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h1>DocuForge<span class="pro-badge">PRO</span></h1>
+                    <p>Intelligent PDF to Markdown Engine</p>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button id="langBtn" class="icon-btn" title="Language">
+                    <span id="langLabel">EN</span>
+                </button>
+                <button id="themeBtn" class="icon-btn" title="Theme">
+                    <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5" />
+                        <path
+                            d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Grid -->
+        <main class="main-grid">
+            <!-- Left Panel - Controls -->
+            <aside class="control-panel">
+                <div class="panel-section">
+                    <h3 class="section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
+                            height="16">
+                            <circle cx="12" cy="12" r="3" />
+                            <path
+                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        </svg>
+                        <span data-i18n="settings">Configuration</span>
+                    </h3>
+
+                    <!-- Worker Slider -->
+                    <div class="control-group">
+                        <div class="control-header">
+                            <label data-i18n="workers">CPU Workers</label>
+                            <span class="control-value" id="workerVal">6</span>
+                        </div>
+                        <input type="range" id="workerInput" min="1" max="16" value="6" class="styled-range">
+                        <div class="control-hint">
+                            <span data-i18n="recommended">Recommended</span>: <strong id="recWorker">6</strong>
+                        </div>
+                    </div>
+
+                    <!-- Toggle Options -->
+                    <div class="toggle-group">
+                        <div class="toggle-item">
+                            <div class="toggle-info">
+                                <span class="toggle-icon">📊</span>
+                                <span data-i18n="tables">Extract Tables</span>
+                            </div>
+                            <button id="tableSwitch" class="toggle-switch active"></button>
+                        </div>
+                        <div class="toggle-item">
+                            <div class="toggle-info">
+                                <span class="toggle-icon">🖼️</span>
+                                <span data-i18n="images">Extract Images</span>
+                            </div>
+                            <button id="imageSwitch" class="toggle-switch"></button>
+                        </div>
+                        <div class="toggle-item">
+                            <div class="toggle-info">
+                                <span class="toggle-icon">🔍</span>
+                                <span data-i18n="ocr">OCR Mode</span>
+                            </div>
+                            <button id="ocrSwitch" class="toggle-switch"></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Panel -->
+                <div class="panel-section stats-section">
+                    <h3 class="section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
+                            height="16">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                        </svg>
+                        <span data-i18n="stats">Statistics</span>
+                    </h3>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-value" id="statTotal">0</span>
+                            <span class="stat-label" data-i18n="total_files">Files</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="statProcessed">0</span>
+                            <span class="stat-label" data-i18n="processed">Done</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="statSpeed">0</span>
+                            <span class="stat-label" data-i18n="speed">sec/file</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Version -->
+                <div class="version-info">
+                    <span>v2.2.0</span>
+                    <span class="status-dot"></span>
+                    <span id="statusText" data-i18n="ready">Ready</span>
+                </div>
+            </aside>
+
+            <!-- Center Panel - Workspace -->
+            <section class="workspace">
+                <!-- Drop Zones -->
+                <div class="drop-zones">
+                    <div class="drop-card" id="dropInput">
+                        <div class="drop-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="12" y1="18" x2="12" y2="12" />
+                                <line x1="9" y1="15" x2="12" y2="12" />
+                                <line x1="15" y1="15" x2="12" y2="12" />
+                            </svg>
+                        </div>
+                        <h3 data-i18n="input_title">Source Files</h3>
+                        <p id="fileSummary" data-i18n="input_desc">Drag & Drop PDFs here</p>
+                        <input type="file" id="fileInput" accept=".pdf" multiple hidden>
+                    </div>
+
+                    <div class="drop-card" id="dropOutput">
+                        <div class="drop-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                <line x1="12" y1="11" x2="12" y2="17" />
+                                <polyline points="9 14 12 11 15 14" />
+                            </svg>
+                        </div>
+                        <h3 data-i18n="output_title">Destination</h3>
+                        <p id="pathSummary" data-i18n="output_desc">Click to select folder</p>
+                    </div>
+                </div>
+
+                <!-- File Queue -->
+                <div class="queue-container">
+                    <div class="queue-header">
+                        <h3>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
+                                height="16">
+                                <line x1="8" y1="6" x2="21" y2="6" />
+                                <line x1="8" y1="12" x2="21" y2="12" />
+                                <line x1="8" y1="18" x2="21" y2="18" />
+                                <line x1="3" y1="6" x2="3.01" y2="6" />
+                                <line x1="3" y1="12" x2="3.01" y2="12" />
+                                <line x1="3" y1="18" x2="3.01" y2="18" />
+                            </svg>
+                            <span data-i18n="queue_title">Process Queue</span>
+                        </h3>
+                        <span class="queue-count" id="queueCount">0 files</span>
+                    </div>
+                    <div class="queue-list" id="fileList">
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48"
+                                height="48">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                                <line x1="9" y1="9" x2="9.01" y2="9" />
+                                <line x1="15" y1="9" x2="15.01" y2="9" />
+                            </svg>
+                            <p data-i18n="empty_queue">Add some PDFs to get started</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Button -->
+                <div class="action-area">
+                    <button id="convertBtn" class="btn-convert" disabled>
+                        <span class="btn-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="5 3 19 12 5 21 5 3" />
+                            </svg>
+                        </span>
+                        <span class="btn-text" data-i18n="start">Start Conversion</span>
+                        <span class="btn-glow"></span>
+                    </button>
+                    <div class="progress-bar" id="globalProgress">
+                        <div class="progress-fill" id="progressFill"></div>
+                        <span class="progress-text" id="progressText">0%</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

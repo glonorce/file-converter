@@ -4,7 +4,9 @@ from collections import Counter
 
 class StructureExtractor:
     def __init__(self):
-        pass
+        # PERF-P1-001: Create TextHealer once instead of per-line
+        from docuforge.src.cleaning.healer import TextHealer
+        self._healer = TextHealer()
 
     def extract_text_with_structure(self, page: pdfplumber.page.Page, crop_box=None) -> str:
         """
@@ -13,7 +15,7 @@ class StructureExtractor:
         if crop_box:
             try:
                 page = page.crop(bbox=crop_box)
-            except:
+            except Exception:
                 pass # If crop fails, use full page
 
         # Analyze font sizes
@@ -78,26 +80,10 @@ class StructureExtractor:
             # Reconstruction with Heuristic Healing
             base_line = " ".join([w['text'] for w in line_words])
             
-            # Use external Healer
-            # We instantiate once (or global?), but here is fine.
-            from docuforge.src.cleaning.healer import TextHealer
-            # Optimization: Ideally Healer is passed in __init__, but for now we init here.
-            # To detect language properly, we should ideally check the WHOLE page, but line-by-line is okay if we default to TR.
-            # However, for mixed docs, per-line detection is too noisy (short text).
-            # BETTER: Detect from the constructed 'base_line' context? No, too short.
-            # BEST: Just default TR for now, OR if we had passed the full page text...
-            # Let's trust the Healer's default ('tr') for short lines, but actually we want to be smart.
-            # If we are inside a Class, we could store 'page_language'.
-            # For this MVP step, let's create the Healer.
-            
-            healer = TextHealer()
-            
-            # Attempt simple language detection on the line itself if it's long enough
-            # Otherwise default to 'tr' (User's context).
-            # If line has "the" -> en.
-            lang = healer.detect_language(base_line) 
-            
-            line_text = healer.heal_line(base_line, lang=lang)
+            # PERF-P1-001: Reuse healer instance instead of creating per-line
+            # Language detection per-line is still valuable for mixed content
+            lang = self._healer.detect_language(base_line)
+            line_text = self._healer.heal_line(base_line, lang=lang)
 
             if max_size >= header_threshold:
                 # Determine H1 vs H2 vs H3

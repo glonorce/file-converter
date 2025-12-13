@@ -5,6 +5,7 @@ test pdfleri/
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
 
 # Virtual Environment
 .venv/
@@ -21,6 +22,7 @@ logs/
 *.log
 config.yaml
 debug_pdf.py
+ARCHITECTURE.md
 
 # Temp / OS
 .temp_swp/

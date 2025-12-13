@@ -111,21 +111,62 @@ class TextHealer:
             return self._heal_en(text)
 
     def _heal_tr(self, text: str) -> str:
-        # 1. Conjunctions (v e)
-        text = self.re_tr_conjunctions.sub(r'\1\2', text)
+        # Run multiple passes for deeply broken text
+        prev_text = ""
+        passes = 0
+        max_passes = 5
         
-        # 2. Explicit Particles (b u, d a, n e...)
-        text = self.re_tr_particles.sub(r'\1\2', text)
-        text = self.re_tr_particle_e.sub(r'\1\2', text)
+        while text != prev_text and passes < max_passes:
+            prev_text = text
+            passes += 1
+            
+            # 0. Clean multi-space sequences between single letters (deeply broken text)
+            # "d ü ş ü n c e" -> "düşünce"
+            # Pattern: letter + space + letter + space + letter... (3+ chars)
+            text = re.sub(r'\b([a-zA-ZçğıöşüÇĞİÖŞÜ]) ([a-zA-ZçğıöşüÇĞİÖŞÜ]) ([a-zA-ZçğıöşüÇĞİÖŞÜ])\b', r'\1\2\3', text)
+            
+            # 1. Conjunctions (v e)
+            text = self.re_tr_conjunctions.sub(r'\1\2', text)
+            
+            # 2. Explicit Particles (b u, d a, n e...)
+            text = self.re_tr_particles.sub(r'\1\2', text)
+            text = self.re_tr_particle_e.sub(r'\1\2', text)
+            
+            # 3. Special 'O'
+            text = self.re_tr_merge_o.sub(r'\1\2', text)
+            
+            # 4. Hyphens
+            text = self.re_hyphen.sub(r'\1\2', text)
+            
+            # 5. General Merge (Cleanup for anything missed, e.g. other letters)
+            text = self.re_tr_merge_general.sub(r'\1\2', text)
+            
+            # 6. Common broken Turkish words (font encoding issues)
+            # These are high-frequency patterns from corrupted PDFs
+            broken_patterns = [
+                # (broken, fixed)
+                (r'şı', 'şı'),  # normalize
+                (r'ğı', 'ğı'),  # normalize
+                (r'\bba ar', 'başar'),  # başarı, başarılı
+                (r'\bgiri im', 'girişim'),  # girişim, girişimci
+                (r'\bdü ün', 'düşün'),  # düşünce, düşündü
+                (r'\bile i', 'işleş'),  # işleyiş
+                (r'\byap lar', 'yapılar'),
+                (r'\bsistem n', 'sistemin'),
+                (r'\bgörünme yen', 'görünmeyen'),
+                (r'\bmekanizma lar', 'mekanizmalar'),
+                (r'\bba l', 'başl'),  # başlı, başlangıç
+                (r'\bele tir', 'eleştir'),  # eleştiri
+                (r'\ban lay', 'anlay'),  # anlayış
+                (r'\bkaz nd', 'kazandı'),
+                (r'\bgerçekle ti', 'gerçekleşti'),
+                (r'ışş', 'ış'),  # cleanup double ş artifacts
+                (r'ığı', 'ığı'),  # normalize
+                (r'şğ', 'ş'),  # artifact cleanup
+            ]
+            for pattern, replacement in broken_patterns:
+                text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
         
-        # 3. Special 'O'
-        text = self.re_tr_merge_o.sub(r'\1\2', text)
-        
-        # 4. Hyphens
-        text = self.re_hyphen.sub(r'\1\2', text)
-        
-        # 5. General Merge (Cleanup for anything missed, e.g. other letters)
-        text = self.re_tr_merge_general.sub(r'\1\2', text)
         return text
 
     def _heal_en(self, text: str) -> str:

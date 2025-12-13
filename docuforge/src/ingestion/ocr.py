@@ -66,7 +66,7 @@ class SmartOCR:
                     for img in images:
                         if hasattr(img, 'close'):
                             img.close()
-                except:
+                except Exception:
                     pass
                     
                 return text

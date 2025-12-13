@@ -6,6 +6,7 @@ import typer
 from typing import Optional, List
 from pathlib import Path
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import traceback
@@ -35,7 +36,8 @@ def worker_process_chunk(chunk: PDFChunk, config: AppConfig, doc_output_dir: Pat
                 ret = ctypes.windll.kernel32.GetShortPathNameW(path, buf, 256)
                 if ret > 0:
                     return buf.value
-            except:
+            except Exception as e:
+                # Log but continue with original path
                 pass
             return path
 
@@ -59,11 +61,20 @@ def worker_process_chunk(chunk: PDFChunk, config: AppConfig, doc_output_dir: Pat
             os.environ["TMP"] = safe_temp
             tempfile.tempdir = safe_temp
 
+    # Suppress noisy FontBBox warnings from pdfminer (must be before pdfplumber import)
+    import warnings
+    warnings.filterwarnings('ignore', message='.*FontBBox.*')
+    warnings.filterwarnings('ignore', message='.*Could get FontBBox.*')
+    # Also suppress the specific pdfminer messages via logging
+    import logging
+    logging.getLogger('pdfminer').setLevel(logging.ERROR)
+
     import pdfplumber
     from docuforge.src.cleaning.zones import ZoneCleaner
     from docuforge.src.cleaning.artifacts import TextCleaner
     from docuforge.src.extraction.tables import TableExtractor
     from docuforge.src.extraction.images import ImageExtractor
+    from docuforge.src.extraction.visuals import VisualExtractor  # NEW: Chart extraction
     from docuforge.src.extraction.structure import StructureExtractor
     from docuforge.src.ingestion.ocr import SmartOCR
     
@@ -74,6 +85,7 @@ def worker_process_chunk(chunk: PDFChunk, config: AppConfig, doc_output_dir: Pat
     smart_ocr = SmartOCR(config.ocr)
     
     image_extractor = ImageExtractor(config.extraction, output_dir=doc_output_dir)
+    visual_extractor = VisualExtractor(config.extraction, output_dir=doc_output_dir)  # NEW
     
     chunk_md_content = []
     
@@ -97,19 +109,30 @@ def worker_process_chunk(chunk: PDFChunk, config: AppConfig, doc_output_dir: Pat
 
                 structured_text = structure_extractor.extract_text_with_structure(page, crop_box)
                 clean_text = text_cleaner.clean_text(structured_text)
-                tables_md = table_extractor.extract_tables(chunk.temp_path, i + 1)
+                
+                # Pass page object to table extractor for reuse
+                tables_md = table_extractor.extract_tables(chunk.temp_path, i + 1, page)
                 images_md = image_extractor.extract_images(chunk.temp_path, i + 1)
+                
+                # NEW: Extract charts and graphs
+                charts_md = []
+                if config.extraction.charts_enabled:
+                    chart_results = visual_extractor.extract_visuals(chunk.temp_path, i + 1)
+                    charts_md = [link for link, bbox in chart_results]
 
                 # Assembly
                 page_md = f"\n\n## Page {page_num}\n"
+                if charts_md: page_md += "\n" + "\n".join(charts_md) + "\n"  # Charts first
                 if images_md: page_md += "\n" + "\n".join(images_md) + "\n"
                 if tables_md: page_md += "\n" + "\n".join(tables_md) + "\n"
                 page_md += f"\n{clean_text}\n"
                 
                 chunk_md_content.append(page_md)
     except Exception as e:
-        # return output so main thread can log it?
-        return ""
+        # SEC-P1-001: Log errors instead of silently swallowing
+        from loguru import logger
+        logger.error(f"Chunk processing failed for {chunk.source_path} (pages {chunk.start_page}-{chunk.end_page}): {e}")
+        return f"\n\n[ERROR: Failed to process pages {chunk.start_page}-{chunk.end_page}: {str(e)}]\n"
     finally:
         if chunk.temp_path.exists():
             import time
@@ -183,8 +206,8 @@ def convert(
     console.print(f"Workers: {workers}")
 
     # Initialize Loader
-    # chunk_size=10 gives better progress feedback and lower memory footprint per worker
-    loader = PDFLoader(chunk_size=10) 
+    # chunk_size=2 gives granular progress feedback (every 2 pages)
+    loader = PDFLoader(chunk_size=2) 
     
     pdfs = list(input_dir.glob("*.pdf"))
     if not pdfs:
@@ -249,6 +272,25 @@ def convert(
             
     console.print(f"[bold green]Batch Completed! Output at: {output_dir}[/bold green]")
 
+@app.command()
+def web():
+    """
+    Launch the Web Interface & API Server (Localhost).
+    """
+    console.print(Panel.fit(
+        "[bold cyan]DocuForge Web Server[/bold cyan]\n"
+        "[green]http://127.0.0.1:8000[/green]\n"
+        "[dim]Press Ctrl+C to stop[/dim]",
+        border_style="cyan"
+    ))
+    
+    try:
+        from docuforge.api import start_server
+        start_server()
+    except ImportError:
+        console.print("[bold red]Error: Web dependencies missing![/bold red]")
+        console.print("Please run: [yellow]pip install fastapi uvicorn python-multipart[/yellow]")
+
 if __name__ == "__main__":
     # PATCH: Suppress annoying Windows PermissionError on exit due to file locking
     # This happens when background libs (Camelot/Ghostscript) hold file handles during cleanup
@@ -257,9 +299,9 @@ if __name__ == "__main__":
     
     if os.name == 'nt':
         original_rmtree = shutil.rmtree
-        def safe_rmtree(path, ignore_errors=False, onerror=None):
+        def safe_rmtree(path, ignore_errors=False, onerror=None, **kwargs):
             try:
-                original_rmtree(path, ignore_errors=True, onerror=None)
+                original_rmtree(path, ignore_errors=True, onerror=None, **kwargs)
             except Exception:
                 pass
         shutil.rmtree = safe_rmtree

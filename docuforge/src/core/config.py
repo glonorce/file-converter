@@ -26,6 +26,9 @@ class CleaningConfig(BaseModel):
 class ExtractionConfig(BaseModel):
     tables_enabled: bool = True
     images_enabled: bool = False
+    charts_enabled: bool = False  # OFF by default, user must enable explicitly
+    table_fallback_stream: bool = True  # NEW: Try 'stream' if 'lattice' fails
+    min_table_accuracy: float = 0.7  # NEW: Minimum Camelot accuracy score
     min_image_dpi: int = 200
 
 class AppConfig(BaseModel):

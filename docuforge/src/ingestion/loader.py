@@ -12,7 +12,7 @@ class PDFChunk:
     temp_path: Path
 
 class PDFLoader:
-    def __init__(self, chunk_size: int = 50):
+    def __init__(self, chunk_size: int = 2):  # 2 pages per chunk for granular progress
         self.chunk_size = chunk_size
 
     def stream_chunks(self, pdf_path: Path) -> Generator[PDFChunk, None, None]:
@@ -23,7 +23,6 @@ class PDFLoader:
         try:
             with pikepdf.open(pdf_path) as pdf:
                 total_pages = len(pdf.pages)
-                logger.info(f"Processing {pdf_path.name}: {total_pages} pages found.")
 
                 for start_idx in range(0, total_pages, self.chunk_size):
                     end_idx = min(start_idx + self.chunk_size, total_pages)
