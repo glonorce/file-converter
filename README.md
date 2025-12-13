@@ -78,10 +78,17 @@ Bu proje, sadece kod yazmak değil, modern **Sistem Mühendisliği** ve **Yapay 
 *   **Mimari & Mantık (GÖKSEL ÖZKAN):** Projenin "Healer" (Dil düzeltme) algoritması, parçalama (chunking) stratejisi ve hata yönetimi mimarisi insan zekasıyla tasarlanmıştır.
 *   **Kodlama (AI):** Tasarlanan bu karmaşık mimari, AI araçları yönlendirilerek kodlanmıştır.
 
+
 ### 👤 Proje Lideri
 **GÖKSEL ÖZKAN**
 - *System Architecture Design & AI Orchestration*
 - *Project Lead*
+
+## ⚠️ Bilinen Sınırlamalar
+
+- **Karmaşık Tablolar:** 10+ sütunlu, birleştirilmiş hücreli veya renk kodlu (heat-map) tablolar tam doğrulukla çıkarılamayabilir.
+- **Font Encoding Sorunları:** Bazı PDF'lerde Türkçe karakterler (ş, ğ, ı, ü, ö, ç) yanlış kodlanmış olabilir. Healer çoğu hatayı düzeltir ancak %100 garanti edilemez.
+- **Öneri:** Kritik dokümanlar için çıktıyı manuel kontrol edin.
 
 ---
 
@@ -157,6 +164,12 @@ This project demonstrates the power of **Prompt Engineering** and **System Archi
 
 *   **Architecture & Logic:** The "Healer" algorithms, chunking strategies, and robust error handling were designed by the human engineer.
 *   **Implementation:** The code execution was handled by AI under strict architectural guidance.
+
+## ⚠️ Known Limitations
+
+- **Complex Tables:** Tables with 10+ columns, merged cells, or color-coded (heat-map) styling may not extract with 100% accuracy.
+- **Font Encoding Issues:** Some PDFs have improperly encoded Turkish characters (ş, ğ, ı, ü, ö, ç). The Healer corrects most errors but cannot guarantee 100% accuracy.
+- **Recommendation:** Manually review the printout for critical documents.
 
 ## 👤 Author / Yazar
 

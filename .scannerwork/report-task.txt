@@ -1,6 +1,0 @@
-projectKey=file-converter
-serverUrl=http://localhost:9000
-serverVersion=25.10.0.114319
-dashboardUrl=http://localhost:9000/dashboard?id=file-converter
-ceTaskId=1002a0e2-d4ac-499c-9fc9-b07fab080c7c
-ceTaskUrl=http://localhost:9000/api/ce/task?id=1002a0e2-d4ac-499c-9fc9-b07fab080c7c
