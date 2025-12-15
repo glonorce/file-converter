@@ -42,30 +42,29 @@ class TestTextHealerTurkishHealing:
     def test_heal_broken_ve_conjunction(self):
         """'v e' should become 've'"""
         broken = "kitap v e kalem"
-        healed = self.healer.heal_line(broken, lang='tr')
+        healed = self.healer.heal_document(broken)
         assert "ve" in healed
         assert "v e" not in healed
     
     def test_heal_broken_de_particle(self):
         """'d e' should become 'de'"""
         broken = "ben d e geliyorum"
-        healed = self.healer.heal_line(broken, lang='tr')
+        healed = self.healer.heal_document(broken)
         assert "de" in healed
         assert "d e" not in healed
     
     def test_heal_broken_bu_pronoun(self):
         """'b u' should become 'bu'"""
         broken = "b u kitap güzel"
-        healed = self.healer.heal_line(broken, lang='tr')
+        healed = self.healer.heal_document(broken)
         assert "bu" in healed
         assert "b u" not in healed
     
     def test_heal_hyphenated_word(self):
         """'prob- lem' should become 'problem'"""
         broken = "bu bir prob- lem"
-        healed = self.healer.heal_line(broken, lang='tr')
+        healed = self.healer.heal_document(broken)
         assert "problem" in healed
-
 
 class TestTextHealerEnglishHealing:
     """Tests for English text repair (conservative mode)"""
@@ -76,21 +75,21 @@ class TestTextHealerEnglishHealing:
     def test_heal_broken_the(self):
         """'t he' should become 'the'"""
         broken = "t he quick brown fox"
-        healed = self.healer.heal_line(broken, lang='en')
+        healed = self.healer.heal_document(broken)
         assert "the" in healed.lower()
         assert "t he" not in healed
     
     def test_preserve_article_a(self):
         """'a book' should NOT become 'abook' in English"""
         text = "this is a book"
-        healed = self.healer.heal_line(text, lang='en')
+        healed = self.healer.heal_document(text)
         assert "a book" in healed
         assert "abook" not in healed
     
     def test_preserve_pronoun_i(self):
         """'I am' should NOT become 'Iam' in English"""
         text = "I am here"
-        healed = self.healer.heal_line(text, lang='en')
+        healed = self.healer.heal_document(text)
         # I should remain separate
         assert "I am" in healed or "I " in healed
 
@@ -123,12 +122,24 @@ class TestTextHealerEdgeCases:
     
     def test_short_text_handling(self):
         """Very short text should not crash"""
-        assert self.healer.heal_line("ab", lang='tr') == "ab"
-        assert self.healer.heal_line("", lang='tr') == ""
+        assert self.healer.heal_document("ab") == "ab"
+        assert self.healer.heal_document("") == ""
     
     def test_unicode_handling(self):
         """Turkish special characters should be handled"""
         text = "Türkçe özel karakterler: ğ ü ş ı ö ç"
-        healed = self.healer.heal_line(text, lang='tr')
+        healed = self.healer.heal_document(text)
         assert "ğ" in healed
         assert "ş" in healed
+
+    def test_hybrid_suffix_repair(self):
+        """Hybrid Regex: 'kitap lar' should become 'kitaplar'"""
+        text = "bu kitap lar çok güzel"
+        healed = self.healer.heal_document(text)
+        assert "kitaplar" in healed
+        
+    def test_hybrid_explosion_repair(self):
+        """Hybrid Regex: 'k e l i m e' should become 'kelime'"""
+        text = "bu bir k e l i m e örneğidir"
+        healed = self.healer.heal_document(text)
+        assert "kelime" in healed

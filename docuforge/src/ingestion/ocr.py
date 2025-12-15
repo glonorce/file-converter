@@ -32,47 +32,69 @@ class SmartOCR:
             logger.info(f"Page {page_num}: Low text density ({msg_density} chars). Triggering Smart OCR.")
             return self._run_ocr(pdf_path, page_num)
             
-        # 2. Check for "gidble garble" (optional advanced heuristic, skipped for speed)
+        # 2. Check for "Broken Text" (e.g. "G ü ç" or "s i s t e m") using regex
+        # If we see many single characters separated by spaces, the text layer is likely corrupted.
+        import re
+        broken_pattern = re.compile(r'\b\w\s\w\s\w\b')
+        broken_matches = len(broken_pattern.findall(original_text))
         
+        # If we find more than N matches, trigger OCR
+        threshold = self.config.broken_text_threshold
+        # If we find more than N matches, trigger OCR
+        threshold = self.config.broken_text_threshold
+        if broken_matches > threshold:
+            logger.debug(f"Page {page_num}: Detected broken text encoding ({broken_matches} > {threshold}). Triggering Smart OCR.")
+            return self._run_ocr(pdf_path, page_num)
+
         return original_text
 
     def _run_ocr(self, pdf_path: Path, page_num: int) -> str:
         import tempfile
         import shutil
+        from docuforge.src.core.utils import SafeFileManager
         
-        # Create a unique temp directory for this page's OCR operation
-        with tempfile.TemporaryDirectory() as temp_dir:
-            try:
-                # Convert specific page to image
-                # output_folder=temp_dir forces pdf2image to write there
-                images = convert_from_path(
-                    str(pdf_path), 
-                    first_page=page_num, 
-                    last_page=page_num,
-                    dpi=300,
-                    output_folder=temp_dir,
-                    # output_file=f"page_{page_num}", # Optional
-                    paths_only=False
-                )
-                
-                if not images:
-                    return ""
-                    
-                # Run Tesseract
-                text = pytesseract.image_to_string(images[0], lang=self.config.langs)
-                
-                # Explicitly close image to release handle before temp dir cleanup
-                try:
-                    for img in images:
-                        if hasattr(img, 'close'):
-                            img.close()
-                except Exception:
-                    pass
-                    
-                return text
-                
-            except Exception as e:
-                # logger.error(f"OCR Failed for page {page_num}: {e}") # Reduce noise
+        # MANUAL Temporary Directory Managment for Windows Resilience
+        # tempfile.TemporaryDirectory() often fails on Windows due to file locks (PermissionError)
+        # We use strict mkdtemp and our own safe_delete handler.
+        temp_dir = tempfile.mkdtemp(prefix=f"ocr_p{page_num}_")
+        
+        try:
+            # Convert specific page to image
+            # output_folder=temp_dir forces pdf2image to write there
+            images = convert_from_path(
+                str(pdf_path), 
+                first_page=page_num, 
+                last_page=page_num,
+                dpi=300,
+                output_folder=temp_dir,
+                # output_file=f"page_{page_num}", # Optional
+                paths_only=False
+            )
+            
+            if not images:
                 return ""
-            # Context manager handles cleanup of temp_dir
+                
+            # Run Tesseract with custom config (e.g. --psm 6 for tables/lists)
+            text = pytesseract.image_to_string(
+                images[0], 
+                lang=self.config.langs,
+                config=self.config.tesseract_config
+            )
+            
+            # Explicitly close image to release handle before temp dir cleanup
+            try:
+                for img in images:
+                    if hasattr(img, 'close'):
+                        img.close()
+            except Exception:
+                pass
+                
+            return text
+            
+        except Exception as e:
+            logger.debug(f"OCR auto-recovery failed for page {page_num}: {e}")
+            return ""
+        finally:
+            # Robust Cleanup using Retry Logic
+            SafeFileManager.safe_delete(Path(temp_dir))
 

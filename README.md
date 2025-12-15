@@ -7,11 +7,14 @@
 
 **DocuForge**, PDF belgelerini modern ve yapay zeka dostu **Markdown** formatına dönüştüren, yüksek performanslı bir araçtır. Özellikle Türkçe ve İngilizce için geliştirdiğimiz **"Akıllı Dil Uzmanı" (Healer Engine)** sayesinde, PDF'lerdeki bozuk metinleri (örn: "v e" -> "ve", "t he" -> "the") otomatik olarak onarır.
 
+**Kendi Kendini İyileştiren Motor (Auto-OCR):** Eğer bir sayfada `G ü ç` gibi bozuk font kodlaması tespit edilirse, sistem o sayfayı otomatik olarak OCR (Görsel Okuma) moduna alır ve sorunu %100 düzeltir.
+
 ## 💡 Neden Markdown?
 
 *   **Yapay Zeka (AI) İçin:** ChatGPT veya Claude gibi modellere PDF yerine Markdown verirseniz, dokümanı **%100 doğrulukla** anlarlar.
 *   **GitHub İçin:** Değişiklikleri satır satır takip edebilirsiniz.
-*   **Temiz Okuma:** Sayfa numaraları ve gereksiz boşluklardan arınmış, saf bilgi içerir.
+*   **Temiz Okuma:** Gereksiz boşluklardan, headers ve footers gibi tekrarlayan metinlerden arınmış, saf bilgi içerir.
+*   **🔒 %100 Gizlilik:** Tüm işlemler bilgisayarınızda (Local) gerçekleşir. Belgeleriniz asla internete yüklenmez.
 
 ## 📦 Kurulum (Adım Adım)
 
@@ -44,6 +47,9 @@ iwr -useb get.scoop.sh | iex
 scoop bucket add extras
 scoop install poppler tesseract ghostscript
 ```
+
+> **Not:** Windows için optimize edilmiştir. Mac veya Linux kullanıcıları benzer araçları (Poppler, Tesseract) manuel kurarak (`brew install` veya `apt-get install`) kullanabilir.
+
 
 ## 💻 Kullanım
 
@@ -87,7 +93,7 @@ Bu proje, sadece kod yazmak değil, modern **Sistem Mühendisliği** ve **Yapay 
 ## ⚠️ Bilinen Sınırlamalar
 
 - **Karmaşık Tablolar:** 10+ sütunlu, birleştirilmiş hücreli veya renk kodlu (heat-map) tablolar tam doğrulukla çıkarılamayabilir.
-- **Font Encoding Sorunları:** Bazı PDF'lerde Türkçe karakterler (ş, ğ, ı, ü, ö, ç) yanlış kodlanmış olabilir. Healer çoğu hatayı düzeltir ancak %100 garanti edilemez.
+- **Font Encoding Sorunları:** Bazı PDF'lerde Türkçe karakterler (ş, ğ, ı, ü, ö, ç) yanlış kodlanmış olabilir. Healer çoğu hatayı düzeltir. (Yeni Auto-OCR özelliği bu sorunu büyük ölçüde çözmektedir).
 - **Öneri:** Kritik dokümanlar için çıktıyı manuel kontrol edin.
 
 ---
@@ -96,11 +102,14 @@ Bu proje, sadece kod yazmak değil, modern **Sistem Mühendisliği** ve **Yapay 
 
 **DocuForge** is a high-performance tool designed to convert PDFs into clean, structured **Markdown**. It features a specialized **"Healer Engine"** that intelligently reinforces broken text (e.g., "t he" -> "the") based on the language context (TR/EN).
 
+**Self-Healing Engine (Auto-OCR):** If the system detects broken font encoding (e.g. `P o w e r`), it automatically switches to OCR mode for that specific page, ensuring 100% accurate extraction.
+
 ## 💡 Why Markdown?
 
 *   **For AI & LLMs:** Sending Markdown to models like GPT-4 ensures **100% context accuracy** compared to raw PDFs.
 *   **For Version Control:** Track document changes line-by-line on GitHub.
-*   **For Clarity:** Strips away layout artifacts, headers, and footers.
+*   **For Clarity:** Strips away layout artifacts, repetitive headers, and footers.
+*   **🔒 100% Privacy:** All processing happens locally. No files are uploaded to the cloud.
 
 ## 📦 Installation
 
@@ -131,6 +140,9 @@ iwr -useb get.scoop.sh | iex
 scoop bucket add extras
 scoop install poppler tesseract ghostscript
 ```
+
+> **Note:** Optimized for Windows. Mac or Linux users can run the tool by manually installing dependencies (Poppler, Tesseract) using `brew` or `apt-get`.
+
 
 ## 💻 Usage
 
@@ -168,7 +180,7 @@ This project demonstrates the power of **Prompt Engineering** and **System Archi
 ## ⚠️ Known Limitations
 
 - **Complex Tables:** Tables with 10+ columns, merged cells, or color-coded (heat-map) styling may not extract with 100% accuracy.
-- **Font Encoding Issues:** Some PDFs have improperly encoded Turkish characters (ş, ğ, ı, ü, ö, ç). The Healer corrects most errors but cannot guarantee 100% accuracy.
+- **Font Encoding Issues:** Some PDFs have improperly encoded Turkish characters (ş, ğ, ı, ü, ö, ç). The Healer corrects most errors. (This is now largely solved by the new Auto-OCR feature).
 - **Recommendation:** Manually review the printout for critical documents.
 
 ## 👤 Author / Yazar

@@ -9,6 +9,8 @@ class OCRConfig(BaseModel):
     enable: str = "auto"  # auto, on, off
     langs: str = "eng+tur"
     force_for_low_text_ratio: float = 0.15
+    broken_text_threshold: int = 4  # Matches for "s p a c e d" text to trigger OCR
+    tesseract_config: str = "--psm 6" # Page Segmentation Mode (6=Block, best for lists)
 
 class CleaningConfig(BaseModel):
     repeated_text_ratio: float = 0.6

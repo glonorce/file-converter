@@ -28,3 +28,8 @@ ARCHITECTURE.md
 .temp_swp/
 .DS_Store
 Thumbs.db
+
+# Healer Artifacts
+debug_healer.py
+docuforge/src/cleaning/dicts/*.txt
+!docuforge/src/cleaning/dicts/.keep

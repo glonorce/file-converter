@@ -1,183 +1,266 @@
 # Copyright (c) 2025 GÖKSEL ÖZKAN
-# This software is released under the MIT License.
-# https://github.com/glonorce/file-converter
-
 import re
-from typing import List, Literal
+import pkg_resources
+from pathlib import Path
+from typing import Literal, Set
+from symspellpy import SymSpell, Verbosity
 
 class TextHealer:
     """
-    Advanced linguistic repair module with Language Awareness.
-    Auto-detects language (TR/EN) and applies specific healing rules to prevent
-    over-correction (e.g. merging 'a book' -> 'abook' in English).
+    Healer 4.0: Dictionary-Backed Text Repair Engine.
+    Uses SymSpell frequency analysis to validate merges preventing false positives.
     """
     def __init__(self):
-        # --- Language Detection ---
-        # Expanded stop words for better robust detection
-        self.stops_tr = {'ve', 'bir', 'bu', 'için', 'ile', 'de', 'da', 'ki', 'ne', 'gibi', 'her', 'çok', 'en', 'daha'}
-        self.stops_en = {'the', 'and', 'of', 'to', 'in', 'is', 'it', 'you', 'that', 'for', 'are', 'on', 'with', 'as', 'at'}
+        # 1. Initialize SymSpell
+        # max_dictionary_edit_distance=2, prefix_length=7
+        self.sym_spell = SymSpell(max_dictionary_edit_distance=2, prefix_length=7)
         
-        # --- TURKISH RULES (Aggressive) ---
-        # 1. Broken Conjunctions: "v e" -> "ve", "d e" -> "de", "k i" -> "ki"
-        self.re_tr_conjunctions = re.compile(r'\b([vVdDkK]) ([eEiİ])\b')
+        self.loaded_langs = set()
+        self._load_dictionaries()
         
-        # 2. Heuristic Merge (Consonants + Word)
-        # Excludes 'o' (pronoun). Merges "b ulunan" -> "bulunan".
-        # Excludes 'a'? In TR, 'a' is not a word (except dialect/slang "a" exclamation). 
-        # Merging 'a' + 'cil' -> 'acil' is good.
-        # But 'o' + 'kul' -> 'okul'? 'o' is dangerous.
-        self.re_tr_merge_general = re.compile(r'\b([a-np-zA-NP-ZçğıöşüÇĞİÖŞÜ]) ([a-zçğıöşü]{2,})\b')
-        
-        # 3. 'O' Exception: Merge if followed by specific stems (l, k, m, n, r, t) -> ol, ok, om, on, or, ot
-        self.re_tr_merge_o = re.compile(r'\b([oO]) ([lLmMkKzsSnNrR][a-zçğıöşü]{1,})\b')
-        
-        # 4. Explicit Particle Fixes (High Priority)
-        # Prevents "e nönemlileri", "b u", "d ave", "a z"
-        # We manually map frequent broken particles.
-        # \b(start) (rest)\b checks.
-        # "e n..." -> "en..."
-        # "b u..." -> "bu..."
-        # "d a..." -> "da..."
-        # "n e..." -> "ne..."
-        # "ş u..." -> "şu..."
-        # "a z..." -> "az..."
-        # "y ani..." -> "yani..."
-        # "i le..." -> "ile..." (Rare but possible)
-        # We catch these specifically.
-        # Regex: Single specific char + space + any word chars (1 ot more).
-        # This covers "b u" (bu) and "b uyazıyı" (buyazıyı).
-        self.re_tr_particles = re.compile(r'\b([bBdDnNşŞaAyYiIgGkK]) ([a-zçğıöşü]+)\b')
-        # Note: This is VERY aggressive for the specified letters.
-        # b -> bu, bir, b...
-        # d -> de, da...
-        # n -> ne...
-        # ş -> şu...
-        # a -> az...
-        # y -> ya...
-        # i -> ile... (i le)
-        # k -> ki...
-        # But wait, "b a" -> "ba" (baba?). "b a" is not a word. "b" + "ab..." -> "bab...".
-        # This is safe because "b" alone is never valid in TR text (except list item 'b)', handled by \b checks hopefully).
-        
-        # "e" + "n..." needs separate handling because "e" is common.
-        self.re_tr_particle_e = re.compile(r'\b([eE]) ([nN][a-zçğıöşü]*)\b') # Catch "e n", "e n...", "e ni..."
-
-        # 5. Hyphen Healing (Text-wrapping fixes)
-        # "prob- lem", "prob - lem", "prob-lem" -> "problem"
-        # Be careful of "High-Level".
-        # Safe heuristic: strictly lowercase word + hyphen + space + lowercase word
+        # 1. Hyphen Repair
         self.re_hyphen = re.compile(r'([a-zçğıöşü]{3,})\s?-\s?([a-zçğıöşü]{3,})')
+        
+        # 2. Hybrid Regex Patterns (Aggressive Helpers)
+        # Suffix handling: "yap ı lar" -> "yapılar". Single char separated by space is suspicious.
+        # Expanded list for "Healer Pro" coverage:
+        # - Plurals: lar, ler
+        # - Possessives: (i)m, (i)n, (s)i, (i)miz, (i)niz, leri
+        # - Cases: (y)i, (y)e, de, da, den, dan, (n)in, (n)ın, (n)un, (n)ün
+        # - Copula/Pred: dır, dir, dur, dür, tır, tir, tur, tür, yım, yim, yum, yüm, sın, sin, sun, sün, yız, yiz, yuz, yüz, sınız, siniz
+        # - Derivational: lık, lik, lı, li, lu, lü, sız, siz, suz, süz, cı, ci, cu, cü, çı, çi, çu, çü, daş, deş
+        suffixes = [
+            r'lar', r'ler',
+            r'nın', r'nin', r'nun', r'nün', r'ın', r'in', r'un', r'ün',
+            r'dır', r'dir', r'dur', r'dür', r'tır', r'tir', r'tur', r'tür',
+            r'lık', r'lik', r'luk', r'lük',
+            r'sız', r'siz', r'suz', r'süz',
+            r'cı', r'ci', r'cu', r'cü', r'çı', r'çi', r'çu', r'çü',
+            r'da', r'de', r'dan', r'den', r'la', r'le',
+            r'mış', r'miş', r'muş', r' müş', r'dı', r'di', r'du', r'dü', r'tı', r'ti', r'tu', r'tü',
+            r'sa', r'se', r'malı', r'meli', r'ken',
+            r'yım', r'yim', r'yum', r'yüm', r'sın', r'sin', r'sun', r'sün',
+            r'yız', r'yiz', r'yuz', r'yüz', r'sınız', r'siniz' 
+        ]
+        suffix_pattern = r'\b([a-zA-ZçğıöşüÇĞİÖŞÜ]{3,})\s+(' + '|'.join(suffixes) + r')\b'
+        self.re_orphaned_suffix = re.compile(suffix_pattern, re.IGNORECASE)
+        
+        # Hard-coded Safe Merges (Particles that are definitely one word but often split)
+        # "kart vizit" -> "kartvizit" (if common), "fark et" -> "farket"? (TDK says fark et is separate usually, but...)
+        # "v e y a" -> "veya", "ya da" (separate).
+        # "bir çok" -> "birçok" (Common error)
+        # "hiç bir" -> "hiçbir"
+        self.re_hard_fixes = [
+            (re.compile(r'\bv\s+e\s+y\s+a\b', re.IGNORECASE), "veya"),
+            (re.compile(r'\bb\s+i\s+r\s+ç\s+o\s+k\b', re.IGNORECASE), "birçok"),
+            (re.compile(r'\bh\s+i\s+ç\s+b\s+i\s+r\b', re.IGNORECASE), "hiçbir"),
+            (re.compile(r'\bb\s+i\s+r\s+a\s+z\b', re.IGNORECASE), "biraz"),
+            (re.compile(r'\bh\s+e\s+r\s+h\s+a\s+n\s+g\s+i\b', re.IGNORECASE), "herhangi"),
+        ]
+        
+        # Single char glue: "k e l i m e". 
+        # Captures sequence of 3+ single chars spaced out.
+        self.re_explosion_strict = re.compile(r'\b(?:[a-zA-ZçğıöşüÇĞİÖŞÜ]\s+){2,}[a-zA-ZçğıöşüÇĞİÖŞÜ]\b')
 
-        # --- ENGLISH RULES (Conservative) ---
-        # 1. Specific broken starts common in English PDF extraction
-        # "t he" -> "the", "w ith" -> "with", "t hat" -> "that", "w ill" -> "will"
-        # We can use a general merge BUT must strictly exclude 'a' and 'I'.
-        # Exclude: a, A, i, I.
-        # Regex: Single char (not A/a/I/i) + space + word(2+)
-        self.re_en_merge = re.compile(r'\b([b-hj-np-zB-HJ-NP-Z]) ([a-z]{2,})\b')  # Excludes A, I. Included: B..H, J..N, P..Z
+    def _load_dictionaries(self):
+        # A. Load English (SymSpell default)
+        try:
+            # Try raw path relative to package first (Safer than pkg_resources)
+            import symspellpy
+            base_path = Path(symspellpy.__file__).parent
+            dictionary_path = base_path / "frequency_dictionary_en_82_765.txt"
+            
+            if dictionary_path.exists():
+                self.sym_spell.load_dictionary(str(dictionary_path), term_index=0, count_index=1)
+                self.loaded_langs.add('en')
+            else:
+                print(f"Warning: English dictionary not found at {dictionary_path}")
+        except Exception as e:
+            print(f"Error loading English dict: {e}")
 
-        # 2. "W Is" problem? "W h i c h" -> "Which". (Wide caps handled separately)
-
-        # --- SHARED RULES ---
-        # Wide Caps: "T I T L E" -> "TITLE" (Context agnostic mostly, but risk of "A I" -> "AI" vs "A I" (two vars))
-        # We'll allow 3+ caps merge.
-        self.re_wide_caps = re.compile(r'\b([A-ZÇĞİÖŞÜ])\s+([A-ZÇĞİÖŞÜ])\s+([A-ZÇĞİÖŞÜ])\b')
+        # B. Load Turkish (Local Downloaded)
+        tr_path = Path(__file__).parent / "dicts" / "tr_freq.txt"
+        
+        # Auto-Download if missing
+        if not tr_path.exists() or tr_path.stat().st_size == 0:
+            print(f"Turkish dictionary missing at {tr_path}. Downloading...")
+            try:
+                import urllib.request
+                url = "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/tr/tr_50k.txt"
+                tr_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                with urllib.request.urlopen(url) as response:
+                    data = response.read().decode('utf-8')
+                    
+                lines_out = []
+                for line in data.splitlines():
+                    parts = line.strip().split(' ')
+                    if len(parts) >= 2:
+                        word = parts[0]
+                        count = parts[1]
+                        if len(word) > 1 and word.isalpha():
+                            lines_out.append(f"{word} {count}")
+                            
+                tr_path.write_text("\n".join(lines_out), encoding="utf-8")
+                print(f"Downloaded {len(lines_out)} words.")
+            except Exception as e:
+                print(f"Failed to auto-download dictionary: {e}")
+        
+        if tr_path.exists():
+            # Format is now "word count" properly
+            self.sym_spell.load_dictionary(str(tr_path), term_index=0, count_index=1)
+            self.loaded_langs.add('tr')
 
     def detect_language(self, text: str) -> Literal['tr', 'en']:
-        """
-        Stop-word based detection.
-        Robust, fast, and sufficient for layout/spacing contexts.
-        """
-        if not text:
-            return 'tr'
-            
+        """Simple stop-word detection"""
+        stops_tr = {'ve', 'bir', 'bu', 'için', 'ile', 'de', 'da', 'ki', 'ne', 'gibi'}
+        stops_en = {'the', 'and', 'of', 'to', 'in', 'is', 'it', 'you', 'that', 'for'}
         words = set(text.lower().split())
-        score_tr = len(words.intersection(self.stops_tr))
-        score_en = len(words.intersection(self.stops_en))
-        
-        # Bias towards EN if scores are equal? Or TR?
-        # User is Turkish context. Bias TR.
-        if score_en > score_tr:
-            return 'en'
-        return 'tr'
+        score_tr = len(words.intersection(stops_tr))
+        score_en = len(words.intersection(stops_en))
+        return 'en' if score_en > score_tr else 'tr'
 
-    def heal_line(self, text: str, lang: str = 'tr') -> str:
-        if not text or len(text) < 3:
-            return text
-            
-        if lang == 'tr':
-            return self._heal_tr(text)
-        else:
-            return self._heal_en(text)
-
-    def _heal_tr(self, text: str) -> str:
-        # Run multiple passes for deeply broken text
-        prev_text = ""
-        passes = 0
-        max_passes = 5
+    def check_vowel_harmony(self, base_word: str, suffix: str) -> bool:
+        """
+        Simple Major Vowel Harmony Check.
+        Back Vowels (a, ı, o, u) -> suffix needs (a, ı, o, u) - usually 'a' or 'u'
+        Front Vowels (e, i, ö, ü) -> suffix needs (e, i, ö, ü) - usually 'e' or 'ü'
+        """
+        # Last vowel of base_word
+        vowels_back = set("aıouAIOU")
+        vowels_front = set("eiöüEİÖÜ")
         
-        while text != prev_text and passes < max_passes:
-            prev_text = text
-            passes += 1
-            
-            # 0. Clean multi-space sequences between single letters (deeply broken text)
-            # "d ü ş ü n c e" -> "düşünce"
-            # Pattern: letter + space + letter + space + letter... (3+ chars)
-            text = re.sub(r'\b([a-zA-ZçğıöşüÇĞİÖŞÜ]) ([a-zA-ZçğıöşüÇĞİÖŞÜ]) ([a-zA-ZçğıöşüÇĞİÖŞÜ])\b', r'\1\2\3', text)
-            
-            # 1. Conjunctions (v e)
-            text = self.re_tr_conjunctions.sub(r'\1\2', text)
-            
-            # 2. Explicit Particles (b u, d a, n e...)
-            text = self.re_tr_particles.sub(r'\1\2', text)
-            text = self.re_tr_particle_e.sub(r'\1\2', text)
-            
-            # 3. Special 'O'
-            text = self.re_tr_merge_o.sub(r'\1\2', text)
-            
-            # 4. Hyphens
-            text = self.re_hyphen.sub(r'\1\2', text)
-            
-            # 5. General Merge (Cleanup for anything missed, e.g. other letters)
-            text = self.re_tr_merge_general.sub(r'\1\2', text)
-            
-            # 6. Common broken Turkish words (font encoding issues)
-            # These are high-frequency patterns from corrupted PDFs
-            broken_patterns = [
-                # (broken, fixed)
-                (r'şı', 'şı'),  # normalize
-                (r'ğı', 'ğı'),  # normalize
-                (r'\bba ar', 'başar'),  # başarı, başarılı
-                (r'\bgiri im', 'girişim'),  # girişim, girişimci
-                (r'\bdü ün', 'düşün'),  # düşünce, düşündü
-                (r'\bile i', 'işleş'),  # işleyiş
-                (r'\byap lar', 'yapılar'),
-                (r'\bsistem n', 'sistemin'),
-                (r'\bgörünme yen', 'görünmeyen'),
-                (r'\bmekanizma lar', 'mekanizmalar'),
-                (r'\bba l', 'başl'),  # başlı, başlangıç
-                (r'\bele tir', 'eleştir'),  # eleştiri
-                (r'\ban lay', 'anlay'),  # anlayış
-                (r'\bkaz nd', 'kazandı'),
-                (r'\bgerçekle ti', 'gerçekleşti'),
-                (r'ışş', 'ış'),  # cleanup double ş artifacts
-                (r'ığı', 'ığı'),  # normalize
-                (r'şğ', 'ş'),  # artifact cleanup
-            ]
-            for pattern, replacement in broken_patterns:
-                text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+        last_vowel_type = None # 'back' or 'front'
+        for char in reversed(base_word):
+            if char in vowels_back:
+                last_vowel_type = 'back'
+                break
+            elif char in vowels_front:
+                last_vowel_type = 'front'
+                break
         
-        return text
-
-    def _heal_en(self, text: str) -> str:
-        # 1. Conservative Merge (No 'a', 'I')
-        # Fixes "t he" -> "the", "s he" -> "she"
-        text = self.re_en_merge.sub(r'\1\2', text)
-        return text
+        if not last_vowel_type:
+            return True # No vowels found? Default to permissive.
+            
+        # First vowel of suffix
+        suffix_vowel_type = None
+        for char in suffix:
+            if char in vowels_back:
+                suffix_vowel_type = 'back'
+                break
+            elif char in vowels_front:
+                suffix_vowel_type = 'front'
+                break
+        
+        if not suffix_vowel_type:
+            return True # Suffix has no vowels (e.g. 'm'?)
+            
+        return last_vowel_type == suffix_vowel_type
 
     def heal_document(self, text: str) -> str:
-        """Run on full text block with auto-detection"""
+        if not text: return ""
         lang = self.detect_language(text)
-        lines = text.split('\n')
-        # Process lines with correct language context
-        return "\n".join([self.heal_line(l, lang) for l in lines])
+        
+        # 0. Hybrid Regex Pass (Aggressive Repair)
+        # orphaned suffixes
+        if lang == 'tr':
+            # Hard Fixes First (Common patterns)
+            for pattern, replacement in self.re_hard_fixes:
+                text = pattern.sub(replacement, text)
+            
+            # Suffixes with Vowel Harmony Check
+            def suffix_repl(m):
+                base = m.group(1)
+                suf = m.group(2)
+                if self.check_vowel_harmony(base, suf):
+                    return f"{base}{suf}"
+                return m.group(0) # mismatched harmony, keep separate
+                
+            text = self.re_orphaned_suffix.sub(suffix_repl, text)
+        
+        # 1. Hyphen Repair
+        text = self.re_hyphen.sub(r'\1\2', text)
+
+        # 2. Explosions
+        def explosion_repl(m):
+            s = m.group(0)
+            merged = s.replace(" ", "")
+            # Hybrid: If strict explosion regex matched, trust it more? 
+            # Or just rely on dictionary. Dictionary is safer.
+            if len(merged) > 2:
+                 if self.sym_spell.lookup(merged, Verbosity.TOP, max_edit_distance=0):
+                     return merged
+            return s
+            
+        text = self.re_explosion_strict.sub(explosion_repl, text)
+        
+        # 3. Token-Based Smart Merge (Iterative Sliding Window)
+        # We split by whitespace but ensure we can reconstruct.
+        # Actually, simpler: Split by Space, process, join. 
+        # But we must preserve newlines/punctuation.
+        # Use re.split to keep delimiters.
+        tokens = re.split(r'(\s+)', text)
+        # tokens: ['Plan', ' ', 'B', ' ', 'de', ...]
+        
+        # We assume ' ' or similar are separators.
+        # We iterate and check word (space) word.
+        
+        MAX_PASSES = 3
+        curr_tokens = tokens
+        
+        for _ in range(MAX_PASSES):
+            new_tokens = []
+            i = 0
+            changed = False
+            
+            while i < len(curr_tokens):
+                t1 = curr_tokens[i]
+                
+                # If t1 is not a word, just append
+                # Check if it has word chars
+                if not re.search(r'[a-zA-ZçğıöşüÇĞİÖŞÜ]', t1):
+                    new_tokens.append(t1)
+                    i += 1
+                    continue
+                
+                # Look ahead for t2 (Skip space)
+                if i + 2 < len(curr_tokens):
+                    sep = curr_tokens[i+1]
+                    t2 = curr_tokens[i+2]
+                    
+                    # Ensure sep is just whitespace (no newlines if we want to be safe? or allow line wrap?)
+                    # Allow space/tab. Newline might mean paragraph break.
+                    if re.match(r'^[ \t]+$', sep) and re.match(r'^[a-zA-ZçğıöşüÇĞİÖŞÜ]+$', t2):
+                        # Candidate Pair found: t1 + t2
+                        merged = t1 + t2
+                        
+                        # Apply checks
+                        should_merge = False
+                        
+                        # Special Case Validations
+                        if lang == 'en':
+                           if len(t1) == 1 and t1.lower() in ('a', 'i'): pass
+                           elif len(t2) == 1 and t2.lower() in ('a', 'i'): pass
+                           else: should_merge = True
+                        elif lang == 'tr':
+                            if len(t1) == 1 and t1.lower() == 'o': pass
+                            else: should_merge = True
+                        
+                        if should_merge:
+                            # Dictionary Lookup
+                            if self.sym_spell.lookup(merged, Verbosity.TOP, max_edit_distance=0):
+                                # Success!
+                                new_tokens.append(merged)
+                                i += 3 # Skip sep and t2
+                                changed = True
+                                continue
+                
+                # If no merge, append t1
+                new_tokens.append(t1)
+                i += 1
+            
+            curr_tokens = new_tokens
+            if not changed:
+                break
+                
+        return "".join(curr_tokens)

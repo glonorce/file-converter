@@ -1,6 +1,7 @@
 from typing import List, Dict, Any
 import pdfplumber
 from collections import Counter
+import unicodedata
 
 class StructureExtractor:
     def __init__(self):
@@ -8,95 +9,150 @@ class StructureExtractor:
         from docuforge.src.cleaning.healer import TextHealer
         self._healer = TextHealer()
 
-    def extract_text_with_structure(self, page: pdfplumber.page.Page, crop_box=None) -> str:
+    def _normalize_text(self, text: str) -> str:
+        """Apply Unicode normalization to fix font encoding issues."""
+        if not text:
+            return text
+        # NFC normalization: Composed form (é instead of e + combining accent)
+        return unicodedata.normalize('NFC', text)
+
+    def _extract_lines_from_chars(self, page: pdfplumber.page.Page, crop_box=None) -> List[Dict[str, Any]]:
         """
-        Extracts text but tries to identify Headers based on font size.
+        Manually reconstructs text lines from raw characters.
+        This bypasses pdfplumber's word grouping logic completely.
+        Returns list of lines, where each line is a dictionary containing text and max_font_size.
         """
         if crop_box:
             try:
                 page = page.crop(bbox=crop_box)
             except Exception:
-                pass # If crop fails, use full page
-
-        # Analyze font sizes
-        # distinct_fonts = set()
-        # for char in page.chars:
-        #     distinct_fonts.add((char['fontname'], char['size']))
-        
-        # Simple strategy: 
-        # 1. Get average font size of the page (body text).
-        # 2. Anything significantly larger (>1.2x) is a Header.
-        
-        # Extract words with higher x_tolerance to fix splitting (e.g. "t elif" -> "telif")
-        # RAW PDF ANALYSIS SHOWS WIDE TRACKING. We need to INCREASE tolerance to bridge gaps.
-        words = page.extract_words(
-            keep_blank_chars=False, 
-            extra_attrs=['size', 'fontname'],
-            x_tolerance=6,  # Increased to bridge wide character spacing
-            y_tolerance=3   # Tolerance for finding words on same line
-        )
-        if not words:
-            return ""
-
-        # Calculate mode font size (body text size)
-        sizes = [w['size'] for w in words]
-        if not sizes:
-            return ""
-        
-        body_size = Counter(sizes).most_common(1)[0][0]
-        header_threshold = body_size * 1.2
-
-        # CLUSTERING: Group words into lines based on 'top' (y-axis) with tolerance
-        # Simple integer rounding isn't enough for complex PDFs.
-        
-        lines = {} 
-        # We will map "approximate y" to list of words
-        
-        for w in words:
-            y = w['top']
-            # Find an existing line close to this y
-            found = False
-            for existing_y in lines.keys():
-                if abs(existing_y - y) < 3: # 3 pixel tolerance for line alignment
-                    lines[existing_y].append(w)
-                    found = True
-                    break
-            if not found:
-                lines[y] = [w]
+                pass
+                
+        chars = page.chars
+        if not chars:
+            return []
             
-        sorted_y = sorted(lines.keys())
+        # Sort characters by Line (Y) then Position (X)
+        # Rounding 'top' to nearest integer groups characters on the same visual line
+        chars = sorted(chars, key=lambda c: (round(c['top']), c['x0']))
+        
+        reconstructed_lines = []
+        current_line_chars = []
+        current_y = None
+        y_tolerance = 3
+        
+        # dynamic gap threshold logic
+        def get_gap_threshold(font_size):
+            # Normal space is usually 0.2-0.3 of EM.
+            # We want to merge if gap is smaller than a space.
+            # Turkish broken fonts often have 0.1-0.15 gaps.
+            return font_size * 0.4 
+            
+        for char in chars:
+            char_y = round(char['top'])
+            char_text = self._normalize_text(char.get('text', ''))
+            char_size = char.get('size', 10)
+            
+            if not char_text or char_text.isspace():
+                continue
+                
+            if current_y is None:
+                current_y = char_y
+                
+            # New Line Detection
+            if abs(char_y - current_y) > y_tolerance:
+                if current_line_chars:
+                    reconstructed_lines.append(self._process_line_chars(current_line_chars))
+                current_line_chars = []
+                current_y = char_y
+            
+            current_line_chars.append(char)
+
+        if current_line_chars:
+            reconstructed_lines.append(self._process_line_chars(current_line_chars))
+            
+        return reconstructed_lines
+
+    def _process_line_chars(self, chars: List[Dict]) -> Dict[str, Any]:
+        """Merges characters in a line into words based on distance."""
+        if not chars:
+            return {"text": "", "max_size": 0}
+            
+        words = []
+        current_word = []
+        
+        # Sort by X
+        chars = sorted(chars, key=lambda c: c['x0'])
+        
+        for i, char in enumerate(chars):
+            text = self._normalize_text(char.get('text', ''))
+            size = char.get('size', 10)
+            
+            if not current_word:
+                current_word.append(text)
+                continue
+                
+            prev_char = chars[i-1]
+            gap = char['x0'] - prev_char['x1']
+            
+            # Threshold: If gap is small, it's the same word.
+            # If gap is large, insert space.
+            # 0.35 was too aggressive (caused "Güç,VizyonveSistem")
+            # 0.10 was too weak (caused "G ü ç")
+            # 0.20 is the sweet spot for Turkish kerning.
+            threshold = size * 0.20 
+            
+            if gap > threshold:
+                words.append("".join(current_word))
+                current_word = [text]
+            else:
+                current_word.append(text)
+                
+        if current_word:
+            words.append("".join(current_word))
+            
+        full_line_text = " ".join(words)
+        max_size = max([c['size'] for c in chars])
+        
+        return {"text": full_line_text, "max_size": max_size}
+
+    def extract_text_with_structure(self, page: pdfplumber.page.Page, crop_box=None) -> str:
+        """
+        Extracts text identifying Headers based on font size.
+        Uses raw character reconstruction.
+        """
+        lines = self._extract_lines_from_chars(page, crop_box)
+        if not lines:
+            return ""
+            
+        # Calculate body font size mode
+        all_sizes = [line['max_size'] for line in lines for _ in range(len(line['text']))] # Weighted by length approx
+        # Better: just use max_size of lines
+        line_sizes = [l['max_size'] for l in lines]
+        if not line_sizes: return ""
+        
+        body_size = Counter(line_sizes).most_common(1)[0][0]
+        header_threshold = body_size * 1.2
         
         md_lines = []
-        for y in sorted_y:
-            line_words = sorted(lines[y], key=lambda x: x['x0'])
+        for line in lines:
+            text = line['text']
+            max_size = line['max_size']
             
-            # Reconstruction: Join words with smart spacing
-            # If distance between words is small, space. If large, tab? Markdown doesn't care.
-            line_text = " ".join([w['text'] for w in line_words])
+            # Apply Healer
+            text = self._healer.heal_document(text)
             
-            # Check max size in this line for Header detection
-            max_size = max([w['size'] for w in line_words])
-            
-            # Reconstruction with Heuristic Healing
-            base_line = " ".join([w['text'] for w in line_words])
-            
-            # PERF-P1-001: Reuse healer instance instead of creating per-line
-            # Language detection per-line is still valuable for mixed content
-            lang = self._healer.detect_language(base_line)
-            line_text = self._healer.heal_line(base_line, lang=lang)
-
             if max_size >= header_threshold:
-                # Determine H1 vs H2 vs H3
+                 # Determine H1 vs H2 vs H3
                 if max_size > body_size * 2:
                     prefix = "# "
                 elif max_size > body_size * 1.5:
                     prefix = "## "
                 else:
                     prefix = "### "
-                
-                md_lines.append(f"\n{prefix}{line_text}\n")
+                md_lines.append(f"\n{prefix}{text}\n")
             else:
-                # Optional: Detect if line ends with hyphen? (Not implemented for safety)
-                md_lines.append(line_text)
+                md_lines.append(text)
                 
         return "\n".join(md_lines)
+

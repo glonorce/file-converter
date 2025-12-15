@@ -18,13 +18,14 @@ from tkinter import filedialog
 # Suppress noisy PDFMiner warnings
 logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
-# Import core logic
-from docuforge.main import worker_process_chunk, AppConfig
+from docuforge.src.core.config import AppConfig
 from docuforge.src.ingestion.loader import PDFLoader
+# NEW: Import Centralized Controller
+from docuforge.src.core.controller import PipelineController
 
 app = FastAPI(title="DocuForge API", version="2.1.0")
 
-# SEC-P0-001: Restricted CORS to localhost only (was wildcard "*")
+# SEC-P0-001: Restricted CORS to localhost only
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:8000", "http://localhost:8000"],
@@ -52,17 +53,16 @@ def browse_folder():
     Returns the selected absolute path.
     """
     try:
-        # High-DPI fix for Windows (Prevents Blurry Dialog)
+        # High-DPI fix for Windows
         import ctypes
         try:
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
         except Exception:
             pass
 
-        # Create a hidden root window
         root = tk.Tk()
-        root.withdraw() # Hide it
-        root.attributes('-topmost', True) # Bring to front
+        root.withdraw() 
+        root.attributes('-topmost', True) 
         
         folder_path = filedialog.askdirectory(title="Select Output Folder")
         
@@ -80,12 +80,10 @@ def process_single_pdf_parallel(
     progress_callback=None
 ) -> str:
     """
-    Process a single PDF using multiprocessing (same as CLI).
-    Returns the full markdown content.
+    Process a single PDF using PipelineController (DRY).
     """
-    loader = PDFLoader(chunk_size=2)  # 2 pages per chunk for granular progress
+    loader = PDFLoader(chunk_size=2)
     chunks = list(loader.stream_chunks(input_path))
-    total_chunks = len(chunks)
     
     if progress_callback:
         total_pages = sum(chunk.end_page - chunk.start_page + 1 for chunk in chunks)
@@ -94,10 +92,10 @@ def process_single_pdf_parallel(
     results = []
     pages_done = 0
     
-    # Use ProcessPoolExecutor for parallel processing (like CLI)
     with ProcessPoolExecutor(max_workers=workers) as executor:
+        # Use PipelineController.process_chunk
         futures = {
-            executor.submit(worker_process_chunk, chunk, config, doc_output_dir): chunk
+            executor.submit(PipelineController.process_chunk, chunk, config, doc_output_dir): chunk
             for chunk in chunks
         }
         
@@ -118,7 +116,6 @@ def process_single_pdf_parallel(
                 results.append((chunk.start_page, f"\n\n[ERROR: {e}]\n"))
                 pages_done += chunk_pages
     
-    # Sort by page number to maintain order
     results.sort(key=lambda x: x[0])
     return "\n".join([r[1] for r in results])
 
@@ -133,8 +130,7 @@ async def convert_pdfs_stream(
     images: bool = Form(False)
 ):
     """
-    SSE-based streaming conversion with real-time progress per 2 pages.
-    Uses multiprocessing for CLI-equivalent speed.
+    SSE-based streaming conversion using PipelineController.
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files provided.")
@@ -143,7 +139,7 @@ async def convert_pdfs_stream(
         use_local_path = False
         target_dir = None
         
-        # SEC-P1-002: Path traversal protection
+        # Path traversal check
         if output_path:
             target_path = Path(output_path).resolve()
             allowed_roots = [Path.home().resolve(), Path("C:/Users/Public").resolve()]
@@ -169,7 +165,6 @@ async def convert_pdfs_stream(
                     continue
 
                 try:
-                    # Send file start event
                     yield f"data: {json.dumps({'type': 'file_start', 'file': file.filename, 'file_idx': file_idx})}\n\n"
                     
                     input_path = request_temp_path / file.filename
@@ -183,7 +178,7 @@ async def convert_pdfs_stream(
                         doc_output_dir = request_temp_path / "output" / Path(file.filename).stem
                         doc_output_dir.mkdir(parents=True, exist_ok=True)
 
-                    # Use multiprocessing for speed (like CLI)
+                    # Unified Pipeline Logic
                     loader = PDFLoader(chunk_size=2)
                     chunks = list(loader.stream_chunks(input_path))
                     total_pages = sum(chunk.end_page - chunk.start_page + 1 for chunk in chunks)
@@ -191,10 +186,9 @@ async def convert_pdfs_stream(
                     results = []
                     pages_done = 0
                     
-                    # Parallel processing with ProcessPoolExecutor
                     with ProcessPoolExecutor(max_workers=workers) as executor:
                         futures = {
-                            executor.submit(worker_process_chunk, chunk, config, doc_output_dir): chunk
+                            executor.submit(PipelineController.process_chunk, chunk, config, doc_output_dir): chunk
                             for chunk in chunks
                         }
                         
@@ -211,12 +205,10 @@ async def convert_pdfs_stream(
                             pages_done += chunk_pages
                             percent = int((pages_done / total_pages) * 100)
                             
-                            # Send progress event every 2 pages
                             yield f"data: {json.dumps({'type': 'progress', 'file': file.filename, 'file_idx': file_idx, 'pages_done': pages_done, 'total_pages': total_pages, 'percent': percent})}\n\n"
                             
-                            await asyncio.sleep(0.01)  # Allow event loop
+                            await asyncio.sleep(0.01)
                     
-                    # Sort and join results
                     results.sort(key=lambda x: x[0])
                     final_md = "\n".join([r[1] for r in results])
                     
@@ -231,7 +223,6 @@ async def convert_pdfs_stream(
                     logging.error(f"Error processing {file.filename}: {e}")
                     yield f"data: {json.dumps({'type': 'file_error', 'file': file.filename, 'file_idx': file_idx, 'error': str(e)})}\n\n"
 
-            # Send completion event
             yield f"data: {json.dumps({'type': 'complete', 'total_files': len(files)})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -246,7 +237,7 @@ async def convert_pdfs(
     ocr: str = Form("auto"),
     images: bool = Form(False)
 ):
-    """Original synchronous endpoint with multiprocessing (kept for compatibility)"""
+    """Synchronous endpoint with multiprocessing"""
     if not files:
         raise HTTPException(status_code=400, detail="No files provided.")
 
@@ -255,7 +246,6 @@ async def convert_pdfs(
     use_local_path = False
     target_dir = None
     
-    # SEC-P1-002: Path traversal protection
     if output_path:
         target_path = Path(output_path).resolve()
         allowed_roots = [Path.home().resolve(), Path("C:/Users/Public").resolve()]
@@ -292,7 +282,6 @@ async def convert_pdfs(
                     doc_output_dir = request_temp_path / "output" / Path(file.filename).stem
                     doc_output_dir.mkdir(parents=True, exist_ok=True)
 
-                # Use parallel processing (like CLI)
                 final_md = process_single_pdf_parallel(
                     input_path, doc_output_dir, config, workers
                 )
