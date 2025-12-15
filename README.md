@@ -70,7 +70,7 @@ Sihirbaz başladığında sizden **PDF Klasörü**, **Çıktı Yeri** ve **Geli�
 
 ## 🛠️ Ayarlar ve İpuçları
 
-*   **Parallel Workers (Varsayılan: 4):** Bilgisayarınızın aynı anda kaç dosya işleyeceğini belirler. Güçlü PC'lerde 8 yapılabilir.
+*   **Parallel Workers:** İşlemci çekirdeklerinize göre otomatik önerilir. (Manuel komutta varsayılan: 4).
 *   **Gelişmiş Seçenekler (Varsayılan: KAPALI):**
     *   **OCR:** Sadece taranmış/resim şeklindeki sayfalar için açın (Otomatik devreye girer).
     *   **Tables:** Tabloları analiz eder.
@@ -98,7 +98,7 @@ Bu proje, sadece kod yazmak değil, modern **Sistem Mühendisliği** ve **Yapay 
 
 ---
 
-# 🇬🇧 DocuForge: Intelligent PDF to Markdown Engine
+# EN DocuForge: Intelligent PDF to Markdown Engine
 
 **DocuForge** is a high-performance tool designed to convert PDFs into clean, structured **Markdown**. It features a specialized **"Healer Engine"** that intelligently reinforces broken text (e.g., "t he" -> "the") based on the language context (TR/EN).
 
@@ -163,7 +163,7 @@ The wizard will ask for your **Input Directory**, **Output Path**, and **Advance
 
 ## 🛠️ Settings & Tips
 
-*   **Parallel Workers (Default: 4):** How many files to process at once. Increase to 8+ on powerful CPUs.
+*   **Parallel Workers:** Automatically optimized based on your CPU cores. (CLI default: 4).
 *   **Advanced Options (Default: OFF):**
     *   **OCR:** Enables text recognition for scanned pages.
     *   **Tables:** Extracts data tables.
