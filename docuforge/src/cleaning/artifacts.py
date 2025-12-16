@@ -22,7 +22,13 @@ class TextCleaner:
                 continue
             cleaned_lines.append(line)
             
-        return "\n".join(cleaned_lines)
+        result = "\n".join(cleaned_lines)
+        
+        # Remove trailing standalone page numbers (common in footers)
+        # Matches newline followed by digits and end of string
+        result = re.sub(r'(?:^|\n)\s*\d+\s*$', '', result)
+        
+        return result
 
     def _is_garbage(self, line: str) -> bool:
         """

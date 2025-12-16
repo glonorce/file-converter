@@ -1,4 +1,3 @@
-
 import os
 import urllib.request
 from pathlib import Path
@@ -8,9 +7,11 @@ def ensure_tr_dict(target_path: Path = None):
         target_path = Path("docuforge/src/cleaning/dicts/tr_freq.txt")
         
     if target_path.exists() and target_path.stat().st_size > 0:
+        print(f"Dictionary already exists at {target_path}")
         return # Already exists
         
     url = "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/tr/tr_50k.txt"
+    # Ensure parent directory exists
     target_path.parent.mkdir(parents=True, exist_ok=True)
     
     print(f"Downloading Turkish Dictionary from {url}...")
@@ -25,6 +26,7 @@ def ensure_tr_dict(target_path: Path = None):
             if len(parts) >= 2:
                 word = parts[0]
                 count = parts[1]
+                # Basic validation
                 if len(word) > 1 and word.isalpha():
                     lines_out.append(f"{word} {count}")
         

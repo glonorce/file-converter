@@ -21,8 +21,8 @@ output/
 logs/
 *.log
 config.yaml
+test_output_neural/
 debug_pdf.py
-ARCHITECTURE.md
 
 # Temp / OS
 .temp_swp/

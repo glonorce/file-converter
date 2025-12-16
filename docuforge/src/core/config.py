@@ -32,6 +32,13 @@ class ExtractionConfig(BaseModel):
     table_fallback_stream: bool = True  # NEW: Try 'stream' if 'lattice' fails
     min_table_accuracy: float = 0.7  # NEW: Minimum Camelot accuracy score
     min_image_dpi: int = 200
+    
+    # Neural-Spatial Engine Settings
+    use_neural_engine: bool = True  # Enable new engine by default
+    neural_min_table_rows: int = 2  # Minimum rows for valid table
+    neural_adaptive_threshold: float = 0.3  # Min fill ratio for standard rows
+    neural_chart_curve_threshold: int = 5  # Curves above this → CHART
+    neural_fallback_to_legacy: bool = True  # Fallback to Camelot/pdfplumber if Neural fails
 
 class AppConfig(BaseModel):
     input_dir: Optional[Path] = None

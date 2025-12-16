@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import pdfplumber
 from collections import Counter
 import unicodedata
@@ -16,7 +16,7 @@ class StructureExtractor:
         # NFC normalization: Composed form (é instead of e + combining accent)
         return unicodedata.normalize('NFC', text)
 
-    def _extract_lines_from_chars(self, page: pdfplumber.page.Page, crop_box=None) -> List[Dict[str, Any]]:
+    def _extract_lines_from_chars(self, page: pdfplumber.page.Page, crop_box=None, ignore_regions=None) -> List[Dict[str, Any]]:
         """
         Manually reconstructs text lines from raw characters.
         This bypasses pdfplumber's word grouping logic completely.
@@ -55,6 +55,18 @@ class StructureExtractor:
             
             if not char_text or char_text.isspace():
                 continue
+                
+            # Check if char is in ignored region (e.g. table)
+            if ignore_regions:
+                cx = (char['x0'] + char['x1']) / 2
+                cy = (char['top'] + char['bottom']) / 2
+                is_ignored = False
+                for r_x0, r_y0, r_x1, r_y1 in ignore_regions:
+                    if r_x0 <= cx <= r_x1 and r_y0 <= cy <= r_y1:
+                        is_ignored = True
+                        break
+                if is_ignored:
+                    continue
                 
             if current_y is None:
                 current_y = char_y
@@ -116,12 +128,17 @@ class StructureExtractor:
         
         return {"text": full_line_text, "max_size": max_size}
 
-    def extract_text_with_structure(self, page: pdfplumber.page.Page, crop_box=None) -> str:
+    def extract_text_with_structure(self, page: pdfplumber.page.Page, crop_box=None, ignore_regions: List[Tuple[float, float, float, float]] = None) -> str:
         """
         Extracts text identifying Headers based on font size.
         Uses raw character reconstruction.
+        
+        Args:
+            page: PDF page
+            crop_box: Optional crop box (x0, top, x1, bottom)
+            ignore_regions: Optional list of (x0, top, x1, bottom) regions to exclude (e.g. tables)
         """
-        lines = self._extract_lines_from_chars(page, crop_box)
+        lines = self._extract_lines_from_chars(page, crop_box, ignore_regions)
         if not lines:
             return ""
             

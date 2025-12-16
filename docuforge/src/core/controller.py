@@ -49,13 +49,16 @@ class PipelineController:
         from docuforge.src.extraction.visuals import VisualExtractor
         from docuforge.src.extraction.structure import StructureExtractor
         from docuforge.src.ingestion.ocr import SmartOCR
+        from docuforge.src.extraction.engine_neural import NeuralSpatialEngine
+        from loguru import logger
         
         # 3. Instantiate Engines
         zone_cleaner = ZoneCleaner(config.cleaning)
         text_cleaner = TextCleaner(config.cleaning)
-        table_extractor = TableExtractor(config.extraction)
+        table_extractor = TableExtractor(config.extraction)  # Legacy fallback
         structure_extractor = StructureExtractor()
         smart_ocr = SmartOCR(config.ocr)
+        neural_engine = NeuralSpatialEngine(config.extraction)  # New Neural Engine
         
         # Visual/Image extractors need output dir
         image_extractor = ImageExtractor(config.extraction, output_dir=doc_output_dir)
@@ -81,19 +84,46 @@ class PipelineController:
                         chunk_md_content.append(f"\n\n## Page {page_num}\n\n{clean_text}\n")
                         continue
 
-                    # Standard Path: Structure Extraction from Vector PDF
-                    structured_text = structure_extractor.extract_text_with_structure(page, crop_box)
+                    # C. Visual Extraction (Tables, Images, Charts)
+                    tables_md = []
+                    charts_md = []
+                    ignore_regions = []
+                    
+                    # C1. Try Neural-Spatial Engine First (if enabled)
+                    if config.extraction.use_neural_engine and config.extraction.tables_enabled:
+                        try:
+                            # Now returns table_bboxes as third value
+                            neural_tables, neural_charts, table_bboxes = neural_engine.process_page(page, page_num)
+                            tables_md.extend(neural_tables)
+                            ignore_regions.extend(table_bboxes)
+                            
+                            # Mark detected charts
+                            for chart in neural_charts:
+                                if config.extraction.charts_enabled:
+                                    charts_md.append(f"📊 *Chart detected on Page {page_num}* ({chart.chart_type})")
+                                    # Also ignore charts in text extraction
+                                    ignore_regions.append((chart.bbox.x0, chart.bbox.y0, chart.bbox.x1, chart.bbox.y1))
+                                    
+                        except Exception as e:
+                            logger.warning(f"Page {page_num}: Neural engine failed, falling back: {e}")
+                    
+                    # C2. Fallback to Legacy Extractor (if Neural found nothing or is disabled)
+                    if not tables_md and config.extraction.neural_fallback_to_legacy:
+                        legacy_tables = table_extractor.extract_tables(chunk.temp_path, i + 1, page)
+                        tables_md.extend(legacy_tables)
+
+                    # B. Structure Extraction (Text) - Now with Masking!
+                    # Pass ignore_regions (tables/charts) to prevent double extraction
+                    structured_text = structure_extractor.extract_text_with_structure(page, crop_box, ignore_regions)
                     clean_text = text_cleaner.clean_text(structured_text)
                     
-                    # C. Visual Extraction (Tables, Images, Charts)
-                    # Pass page object to table extractor for reuse optimization
-                    tables_md = table_extractor.extract_tables(chunk.temp_path, i + 1, page)
+                    # C3. Image Extraction
                     images_md = image_extractor.extract_images(chunk.temp_path, i + 1)
                     
-                    charts_md = []
-                    if config.extraction.charts_enabled:
+                    # C4. Chart Extraction (legacy visual extractor)
+                    if config.extraction.charts_enabled and not charts_md:
                         chart_results = visual_extractor.extract_visuals(chunk.temp_path, i + 1)
-                        charts_md = [link for link, bbox in chart_results]
+                        charts_md.extend([link for link, bbox in chart_results])
 
                     # D. Assembly
                     page_md = f"\n\n## Page {page_num}\n"
@@ -113,3 +143,4 @@ class PipelineController:
             SafeFileManager.safe_delete(chunk.temp_path)
                 
         return "\n".join(chunk_md_content)
+
