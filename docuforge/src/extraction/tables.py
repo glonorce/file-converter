@@ -214,7 +214,7 @@ class TableExtractor:
         num_cols = len(header)
         
         lines = []
-        lines.append(f"\n**Table {page_num}-{table_idx}**\n")
+        lines = []
         lines.append("| " + " | ".join(header) + " |")
         lines.append("| " + " | ".join(["---"] * num_cols) + " |")
         
@@ -233,7 +233,7 @@ class TableExtractor:
         
         try:
             md = df.to_markdown(index=False)
-            return f"\n**Table {page_num}-{table_idx}** _{method}_\n{md}\n"
+            return f"\n{md}\n"
         except ImportError:
             # Fallback without tabulate
             return self._table_to_markdown(df.values.tolist(), page_num, table_idx)

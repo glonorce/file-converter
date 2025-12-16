@@ -1129,8 +1129,7 @@ class NeuralSpatialEngine:
         
         # Build markdown
         header = cleaned[0]
-        lines = [f"\n**Table {page_num}-{table_idx}**\n"]
-        lines.append("| " + " | ".join(header) + " |")
+        lines = ["| " + " | ".join(header) + " |"]
         lines.append("| " + " | ".join(["---"] * max_cols) + " |")
         
         for row in cleaned[1:]:
