@@ -75,6 +75,7 @@ Sihirbaz başladığında sizden **PDF Klasörü**, **Çıktı Yeri** ve **Geli�
     *   **OCR:** Sadece taranmış/resim şeklindeki sayfalar için açın (Otomatik devreye girer).
     *   **Tables:** Tabloları analiz eder.
     *   **Images:** Resimleri ayıklar (Açıksa klasör oluşturur, kapalıysa oluşturmaz).
+    *   **Charts (Beta):** Grafikleri ayıklar (Düzensiz çalışabilir, deneyseldir).
     *   **Header Sensitivity (0.6):** Sayfa numarası/kitap adı gibi tekrarlayan metinleri silme hassasiyetidir. (0.6 = %60 tekrar ediyorsa sil).
 
 ## 🧠 Geliştirme Yaklaşımı: AI Orkestrasyonu
@@ -168,6 +169,7 @@ The wizard will ask for your **Input Directory**, **Output Path**, and **Advance
     *   **OCR:** Enables text recognition for scanned pages.
     *   **Tables:** Extracts data tables.
     *   **Images:** Extracts embedded images (Creates folder only if found).
+    *   **Charts (Beta):** Extracts charts/graphs (Experimental, may be irregular).
     *   **Header Sensitivity (0.6):** Controls removal of repeated text (headers/footers). 0.6 means "remove if present on 60% of pages".
 
 ## 🧠 Development Philosophy: AI Orchestration

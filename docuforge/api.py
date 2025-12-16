@@ -127,7 +127,8 @@ async def convert_pdfs_stream(
     workers: int = Form(4),
     tables: bool = Form(True),
     ocr: str = Form("auto"),
-    images: bool = Form(False)
+    images: bool = Form(False),
+    charts: bool = Form(False)
 ):
     """
     SSE-based streaming conversion using PipelineController.
@@ -157,6 +158,7 @@ async def convert_pdfs_stream(
             config = AppConfig()
             config.extraction.tables_enabled = tables
             config.extraction.images_enabled = images
+            config.extraction.charts_enabled = charts
             config.ocr.enable = ocr
             config.workers = workers
 
@@ -235,7 +237,8 @@ async def convert_pdfs(
     workers: int = Form(4),
     tables: bool = Form(True),
     ocr: str = Form("auto"),
-    images: bool = Form(False)
+    images: bool = Form(False),
+    charts: bool = Form(False)
 ):
     """Synchronous endpoint with multiprocessing"""
     if not files:
@@ -263,6 +266,7 @@ async def convert_pdfs(
         config = AppConfig()
         config.extraction.tables_enabled = tables
         config.extraction.images_enabled = images
+        config.extraction.charts_enabled = charts
         config.ocr.enable = ocr
         config.workers = workers
 

@@ -32,6 +32,7 @@ def convert(
     output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Directory for output Markdown"),
     config_path: Optional[Path] = typer.Option(None, "--config", "-c", help="Path to config.yaml"),
     workers: int = typer.Option(4, "--workers", "-w", help="Number of parallel workers"),
+    charts: bool = typer.Option(False, "--charts", help="Enable chart extraction (Experimental/Irregular support)"),
 ):
     """
     Convert a batch of PDFs to Markdown.
@@ -58,9 +59,9 @@ def convert(
     else:
         # Override config with CLI args
         config.input_dir = input_dir
-        if output_dir:
-            config.output_dir = output_dir
+        config.output_dir = output_dir or input_dir
         config.workers = workers
+        config.extraction.charts_enabled = charts
 
     # 3. Validation
     if not config.input_dir or not config.input_dir.exists():
@@ -82,7 +83,7 @@ def convert(
     console.print(f"Workers: {workers}")
 
     # Initialize Loader
-    loader = PDFLoader(chunk_size=2) 
+    loader = PDFLoader(chunk_size=50) 
     
     pdfs = list(input_dir.glob("*.pdf"))
     if not pdfs:

@@ -28,6 +28,7 @@ class PipelineController:
         # Suppress noisy warnings
         warnings.filterwarnings('ignore', message='.*FontBBox.*')
         warnings.filterwarnings('ignore', message='.*Could get FontBBox.*')
+        warnings.filterwarnings('ignore', message='.*pkg_resources.*')  # Suppress deprecation warning in workers
         logging.getLogger('pdfminer').setLevel(logging.ERROR)
 
     @staticmethod
@@ -98,11 +99,13 @@ class PipelineController:
                             ignore_regions.extend(table_bboxes)
                             
                             # Mark detected charts
+                            # Mark detected charts (for visual output)
                             for chart in neural_charts:
                                 if config.extraction.charts_enabled:
                                     charts_md.append(f"📊 *Chart detected on Page {page_num}* ({chart.chart_type})")
-                                    # Also ignore charts in text extraction
-                                    ignore_regions.append((chart.bbox.x0, chart.bbox.y0, chart.bbox.x1, chart.bbox.y1))
+                                
+                                # ALWAYS ignore chart regions in text extraction to avoid word salad
+                                ignore_regions.append((chart.bbox.x0, chart.bbox.y0, chart.bbox.x1, chart.bbox.y1))
                                     
                         except Exception as e:
                             logger.warning(f"Page {page_num}: Neural engine failed, falling back: {e}")

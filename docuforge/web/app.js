@@ -18,6 +18,7 @@ const i18n = {
         recommended: "Recommended",
         tables: "Extract Tables",
         images: "Extract Images",
+        charts: "Extract Charts (Beta)",
         ocr: "OCR Mode",
         stats: "Statistics",
         total_files: "Files",
@@ -45,6 +46,7 @@ const i18n = {
         recommended: "Önerilen",
         tables: "Tabloları Çıkar",
         images: "Resimleri Çıkar",
+        charts: "Grafikleri Çıkar (Beta)",
         ocr: "OCR Modu",
         stats: "İstatistikler",
         total_files: "Dosya",
@@ -98,6 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('tableSwitch').onclick = () => toggleSwitch('tableSwitch');
     document.getElementById('imageSwitch').onclick = () => toggleSwitch('imageSwitch');
+    document.getElementById('chartSwitch').onclick = () => toggleSwitch('chartSwitch');
     document.getElementById('ocrSwitch').onclick = () => toggleSwitch('ocrSwitch');
 
     // ===== Theme Toggle =====
@@ -301,7 +304,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const workers = document.getElementById('workerInput').value;
         const tables = document.getElementById('tableSwitch').classList.contains('active');
         const images = document.getElementById('imageSwitch').classList.contains('active');
-        const ocr = document.getElementById('ocrSwitch').classList.contains('active') ? 'on' : 'auto';
+        const charts = document.getElementById('chartSwitch').classList.contains('active');
+        // OCR Logic: Active = 'auto', Inactive = 'off' (User Request)
+        const ocr = document.getElementById('ocrSwitch').classList.contains('active') ? 'auto' : 'off';
 
         // Prepare FormData with ALL files
         const formData = new FormData();
@@ -310,6 +315,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         formData.append('workers', workers);
         formData.append('tables', tables);
         formData.append('images', images);
+        formData.append('charts', charts);
         formData.append('ocr', ocr);
 
         // Reset file states

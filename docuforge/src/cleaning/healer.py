@@ -1,5 +1,8 @@
 # Copyright (c) 2025 GÖKSEL ÖZKAN
 import re
+import warnings
+# Suppress pkg_resources deprecation warning
+warnings.filterwarnings("ignore", category=UserWarning, module='pkg_resources')
 import pkg_resources
 from pathlib import Path
 from typing import Literal, Set
@@ -9,14 +12,29 @@ class TextHealer:
     """
     Healer 4.0: Dictionary-Backed Text Repair Engine.
     Uses SymSpell frequency analysis to validate merges preventing false positives.
+    
+    Implemented as Singleton to load dictionaries only once per worker process.
     """
+    _instance = None
+    _initialized = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(TextHealer, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self):
+        if self._initialized:
+            return
+            
         # 1. Initialize SymSpell
         # max_dictionary_edit_distance=2, prefix_length=7
         self.sym_spell = SymSpell(max_dictionary_edit_distance=2, prefix_length=7)
         
         self.loaded_langs = set()
         self._load_dictionaries()
+        
+        self._initialized = True
         
         # 1. Hyphen Repair
         self.re_hyphen = re.compile(r'([a-zçğıöşü]{3,})\s?-\s?([a-zçğıöşü]{3,})')

@@ -71,10 +71,11 @@ class InteractiveWizard:
         config.workers = workers
         
         # 4. Advanced Options
-        if Confirm.ask("[bold yellow]?[/bold yellow] Configure Advanced Options? (OCR, Tables, Images)", default=False):
+        if Confirm.ask("[bold yellow]?[/bold yellow] Configure Advanced Options? (OCR, Tables, Images, Charts)", default=False):
             config.ocr.enable = Prompt.ask("OCR Mode", choices=["auto", "on", "off"], default="auto")
             config.extraction.tables_enabled = Confirm.ask("Enable Table Extraction?", default=True)
-            config.extraction.images_enabled = Confirm.ask("Enable Image Extraction?", default=False) # User requested OFF by default
+            config.extraction.images_enabled = Confirm.ask("Enable Image Extraction?", default=False)
+            config.extraction.charts_enabled = Confirm.ask("Enable Chart Extraction (Experimental)?", default=False) 
             config.cleaning.repeated_text_ratio = float(Prompt.ask("Header/Footer Removal Sensitivity (0.0-1.0)", default="0.6"))
 
         console.print("\n[bold green]Configuration Ready![/bold green]")

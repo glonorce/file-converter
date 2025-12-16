@@ -56,7 +56,12 @@ class TableExtractor:
         # Strategy 1: Try Camelot FIRST (better for complex bordered tables)
         # Camelot handles merged cells and wide tables more reliably
         if self._check_camelot():
-            camelot_tables = self._extract_camelot(pdf_path, page_num)
+            has_vectors = True
+            if page:
+                # If we have the page object, check for vector graphics
+                has_vectors = bool(page.lines or page.rects)
+                
+            camelot_tables = self._extract_camelot(pdf_path, page_num, has_vectors)
             if camelot_tables:
                 all_tables.extend(camelot_tables)
         
@@ -144,32 +149,33 @@ class TableExtractor:
         
         return True
     
-    def _extract_camelot(self, pdf_path: Path, page_num: int) -> List[str]:
+    def _extract_camelot(self, pdf_path: Path, page_num: int, has_vectors: bool = True) -> List[str]:
         """Extract tables using Camelot with lattice -> stream fallback"""
         import camelot
         
         md_tables = []
         
-        # Try lattice first (bordered tables)
-        try:
-            tables = camelot.read_pdf(
-                str(pdf_path),
-                pages=str(page_num),
-                flavor='lattice',
-                suppress_stdout=True
-            )
-            
-            for i, table in enumerate(tables):
-                # Check accuracy score
-                if table.accuracy >= self.config.min_table_accuracy * 100:
-                    md = self._dataframe_to_markdown(table.df, page_num, i + 1, "lattice")
-                    if md:
-                        md_tables.append(md)
-                else:
-                    pass  # Table below accuracy threshold
-                    
-        except Exception:
-            pass  # Camelot lattice failed, will try stream fallback
+        # Try lattice first (bordered tables) - ONLY if vectors exist
+        if has_vectors:
+            try:
+                tables = camelot.read_pdf(
+                    str(pdf_path),
+                    pages=str(page_num),
+                    flavor='lattice',
+                    suppress_stdout=True
+                )
+                
+                for i, table in enumerate(tables):
+                    # Check accuracy score
+                    if table.accuracy >= self.config.min_table_accuracy * 100:
+                        md = self._dataframe_to_markdown(table.df, page_num, i + 1, "lattice")
+                        if md:
+                            md_tables.append(md)
+                    else:
+                        pass  # Table below accuracy threshold
+                        
+            except Exception:
+                pass  # Camelot lattice failed, will try stream fallback
         
         # Try stream if lattice found nothing and fallback is enabled
         if not md_tables and self.config.table_fallback_stream:
