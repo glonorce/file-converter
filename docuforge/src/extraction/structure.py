@@ -89,6 +89,22 @@ class StructureExtractor:
         """Merges characters in a line into words based on distance."""
         if not chars:
             return {"text": "", "max_size": 0}
+        
+        # --- SAFE NOISE FILTER ---
+        # Purpose: Remove chart axis numbers (e.g., "100   80   60") from text flow
+        text_content = "".join([c.get('text', '') for c in chars]).strip()
+        
+        # Filter criteria:
+        # 1. Line is short (<30 chars)
+        # 2. More than 50% is digits
+        # 3. Multiple separate parts (spaced numbers)
+        digit_count = sum(c.isdigit() for c in text_content)
+        
+        if len(text_content) < 30 and digit_count > len(text_content) * 0.5:
+            parts = text_content.split()
+            if len(parts) > 2:  # Like "100 80 60"
+                return {"text": "", "max_size": 0}  # Silently skip
+        # --- END NOISE FILTER ---
             
         words = []
         current_word = []

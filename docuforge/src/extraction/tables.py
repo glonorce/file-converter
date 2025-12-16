@@ -97,9 +97,10 @@ class TableExtractor:
         table_settings = {
             "vertical_strategy": "lines",  # Changed from 'text'
             "horizontal_strategy": "lines",  # Changed from 'text'
-            "snap_tolerance": 5,
-            "join_tolerance": 5,
+            "snap_tolerance": 3,  # Reduced from 5 for better column separation
+            "join_tolerance": 3,   # Reduced from 5 to prevent number merging
             "edge_min_length": 10,
+            "min_words_vertical": 2,  # Safety for paragraph false positives
         }
         
         tables = page.extract_tables(table_settings=table_settings)
@@ -117,34 +118,50 @@ class TableExtractor:
     
     def _is_valid_table(self, table: List[List[str]]) -> bool:
         """
-        Validate that a detected table is actually a table, not regular text.
-        Returns False for false positives.
+        Safe Validator: Checks if detected table is real or just text.
+        Uses text density analysis to reject paragraphs.
         """
-        if not table:
+        if not table or len(table) < 2:
             return False
         
-        # Need at least 2 rows (header + data)
-        if len(table) < 2:
-            return False
-        
-        # Need at least 2 columns (otherwise it's just a list)
+        # Kriter 1: Minimum 2 columns (single column = list, not table)
         if not table[0] or len(table[0]) < 2:
             return False
         
-        # Check column consistency - all rows should have similar column count
-        col_counts = [len(row) for row in table if row]
-        if not col_counts:
+        # Kriter 2: Text Density Analysis
+        long_cell_count = 0
+        total_cells_checked = 0
+        empty_cells = 0
+        total_slots = 0
+        
+        for row in table:
+            if not row:
+                continue
+            total_slots += len(row)
+            for cell in row:
+                if not cell or not str(cell).strip():
+                    empty_cells += 1
+                    continue
+                
+                cell_str = str(cell).strip()
+                total_cells_checked += 1
+                # If cell has >60 chars, it's likely a paragraph
+                if len(cell_str) > 60:
+                    long_cell_count += 1
+        
+        # Reject if >30% of cells contain paragraphs
+        if total_cells_checked > 0 and (long_cell_count / total_cells_checked) > 0.30:
             return False
         
-        # If column counts vary too much, it's probably not a real table
-        min_cols, max_cols = min(col_counts), max(col_counts)
-        if max_cols > min_cols * 2:  # More than 2x variance
+        # Kriter 3: Sparse Table Check
+        # If >85% empty, it's likely a detection error
+        if total_slots > 0 and (empty_cells / total_slots) > 0.85:
             return False
         
-        # Check cell density - if >50% cells are empty, probably not a table
-        total_cells = sum(len(row) for row in table if row)
-        empty_cells = sum(1 for row in table if row for cell in row if not cell or not str(cell).strip())
-        if total_cells > 0 and empty_cells / total_cells > 0.5:
+        # Kriter 4: Column consistency
+        # If column count varies >3x between rows, reject
+        col_counts = [len(r) for r in table if r]
+        if col_counts and max(col_counts) > min(col_counts) * 3:
             return False
         
         return True
