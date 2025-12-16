@@ -76,6 +76,7 @@ Sihirbaz başladığında sizden **PDF Klasörü**, **Çıktı Yeri** ve **Geli�
     *   **Tables:** Tabloları analiz eder.
     *   **Images:** Resimleri ayıklar (Açıksa klasör oluşturur, kapalıysa oluşturmaz).
     *   **Charts (Beta):** Grafikleri ayıklar (Düzensiz çalışabilir, deneyseldir).
+    *   **Recursive Mode:** Alt klasörleri de tarar ve aynı klasör yapısını çıktıda oluşturur.
     *   **Header Sensitivity (0.6):** Sayfa numarası/kitap adı gibi tekrarlayan metinleri silme hassasiyetidir. (0.6 = %60 tekrar ediyorsa sil).
 
 ## 🧠 Geliştirme Yaklaşımı: AI Orkestrasyonu
@@ -170,6 +171,7 @@ The wizard will ask for your **Input Directory**, **Output Path**, and **Advance
     *   **Tables:** Extracts data tables.
     *   **Images:** Extracts embedded images (Creates folder only if found).
     *   **Charts (Beta):** Extracts charts/graphs (Experimental, may be irregular).
+    *   **Recursive Mode:** Scans subdirectories and preserves the folder structure in output.
     *   **Header Sensitivity (0.6):** Controls removal of repeated text (headers/footers). 0.6 means "remove if present on 60% of pages".
 
 ## 🧠 Development Philosophy: AI Orchestration

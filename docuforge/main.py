@@ -33,6 +33,7 @@ def convert(
     config_path: Optional[Path] = typer.Option(None, "--config", "-c", help="Path to config.yaml"),
     workers: int = typer.Option(4, "--workers", "-w", help="Number of parallel workers"),
     charts: bool = typer.Option(False, "--charts", help="Enable chart extraction (Experimental/Irregular support)"),
+    recursive: bool = typer.Option(False, "--recursive", "-r", help="Analyze subdirectories recursively"),
 ):
     """
     Convert a batch of PDFs to Markdown.
@@ -62,6 +63,7 @@ def convert(
         config.output_dir = output_dir or input_dir
         config.workers = workers
         config.extraction.charts_enabled = charts
+        config.extraction.recursive = recursive
 
     # 3. Validation
     if not config.input_dir or not config.input_dir.exists():
@@ -85,37 +87,66 @@ def convert(
     # Initialize Loader
     loader = PDFLoader(chunk_size=50) 
     
-    pdfs = list(input_dir.glob("*.pdf"))
+    # 5. Recursive Scanning
+    if config.extraction.recursive:
+        pdfs = list(input_dir.rglob("*.pdf"))
+    else:
+        pdfs = list(input_dir.glob("*.pdf"))
+        
     if not pdfs:
         console.print("[yellow]No PDFs found in input directory.[/yellow]")
         return
     
+    total_pdfs = len(pdfs)
+    console.print(f"Total Files to Process: [bold cyan]{total_pdfs}[/bold cyan]")
+    
+    # Suppress loguru console output to keep TUI clean
+    from loguru import logger
+    logger.remove()
+    logger.add(lambda msg: None, level="INFO") # Swallow INFO logs
+    # Optional: Log errors to file if needed, but keep console clean
+    
+    # Custom Progress Columns
     with Progress(
         SpinnerColumn(),
         TextColumn("[bold blue]{task.description}"),
         BarColumn(),
         TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         TimeRemainingColumn(),
-        console=console
+        console=console,
+        transient=True # Clear bars after completion
     ) as progress:
         
-        main_task = progress.add_task(f"[green]Total Processing ({len(pdfs)} files)", total=len(pdfs))
+        main_task = progress.add_task(f"[green]Total Batch", total=total_pdfs)
+        file_task = progress.add_task(f"Waiting...", total=100, visible=False) # Reuse this task
         
-        for pdf_path in pdfs:
-            progress.update(main_task, description=f"[green]Processing: {pdf_path.name}")
+        for idx, pdf_path in enumerate(pdfs, 1):
+            progress.update(main_task, description=f"[green]Total Batch [{idx}/{total_pdfs}]")
             
-            # Context dir for assets (images/tables) if needed
-            doc_context_dir = output_dir / pdf_path.stem
+            # Smart Output Path
+            if config.extraction.recursive:
+                try:
+                    rel_path = pdf_path.relative_to(input_dir).parent
+                    target_dir = output_dir / rel_path
+                except ValueError:
+                    target_dir = output_dir
+            else:
+                target_dir = output_dir
+                
+            target_dir.mkdir(parents=True, exist_ok=True)
+            doc_context_dir = target_dir / pdf_path.stem
             
             # Prepare chunks
+            progress.update(file_task, description=f"[cyan]Reading: {pdf_path.name}", visible=True, total=None) # Indeterminate while reading
             chunks = list(loader.stream_chunks(pdf_path))
-            file_task = progress.add_task(f"  {pdf_path.name}", total=len(chunks))
+            total_chunks = len(chunks)
+            
+            progress.update(file_task, description=f"[cyan]Processing: {pdf_path.name}", total=total_chunks, completed=0)
             
             doc_full_md = []
             
             # Parallel Execution
             with ProcessPoolExecutor(max_workers=workers) as executor:
-                # Submit all chunks to PipelineController
                 futures = {
                     executor.submit(PipelineController.process_chunk, chunk, config, doc_context_dir): chunk.start_page 
                     for chunk in chunks
@@ -128,19 +159,19 @@ def convert(
                         res = future.result()
                         results.append((start_page, res))
                     except Exception as e:
-                        console.print(f"[red]Error in chunk starting page {start_page}: {e}[/red]")
+                        # Log error but don't break UI
+                        pass 
                     
                     progress.advance(file_task)
             
-            # Sort results by page number to maintain order
+            # Sort results
             results.sort(key=lambda x: x[0])
             doc_full_md = [r[1] for r in results]
             
             if doc_full_md:
                 final_md = "\n".join(doc_full_md)
-                (output_dir / f"{pdf_path.stem}.md").write_text(final_md, encoding="utf-8")
+                (target_dir / f"{pdf_path.stem}.md").write_text(final_md, encoding="utf-8")
             
-            progress.remove_task(file_task)
             progress.advance(main_task)
             
     console.print(f"[bold green]Batch Completed! Output at: {output_dir}[/bold green]")

@@ -1,7 +1,8 @@
 # DocuForge Mimari Referansı (TR)
 
 ## Genel Bakış
-DocuForge, finansal PDF işlemleri için geliştirilmiş sağlam bir ETL hattıdır (pipeline). Kırılgan "tahmine dayalı" (heuristic) yöntemler yerine, yüksek doğruluklu yapılandırılmış veri çıkarmak için hibrit bir "Nöral-Uzamsal" (Neural-Spatial) yaklaşım kullanır.
+## Genel Bakış
+DocuForge; PDF belgelerini yapay zeka (LLM) uyumlu, sürüm kontrolüne uygun (Git) ve temiz bilgi içeren Markdown formatına dönüştürmek için tasarlanmış modern bir ETL hattıdır. Tüm işlemler yerel (Local) olarak gerçekleştirilir, gizliliği korur.
 
 ## 1. Sistem Çekirdeği
 - **PipelineController:** Çıkarma akışını yönetir; CLI, Web ve İşçi (Worker) ortamlarında tutarlı davranış sağlar.
@@ -47,7 +48,8 @@ DocuForge, finansal PDF işlemleri için geliştirilmiş sağlam bir ETL hattıd
 # DocuForge Architecture Reference (EN)
 
 ## Overview
-DocuForge is a robust ETL pipeline for financial PDF processing, utilizing a hybrid "Neural-Spatial" approach to extract high-fidelity structured data.
+## Overview
+DocuForge is a modern ETL pipeline designed to convert complex PDFs into AI-ready (LLM), version-controllable (Git), and strictly clean Markdown. It prioritizes 100% data privacy by processing everything locally.
 
 ## 1. System Core
 - **PipelineController:** Orchestrates the extraction flow, ensuring consistent behavior across CLI, Web, and Worker environments.

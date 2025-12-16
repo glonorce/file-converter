@@ -31,6 +31,10 @@ class InteractiveWizard:
         default_out = config.input_dir / "output"
         out_str = Prompt.ask("[bold green]?[/bold green] Output Directory", default=str(default_out))
         config.output_dir = Path(out_str)
+
+        # 1.1 Recursive Option (Moved per user request)
+        if Confirm.ask("[bold green]?[/bold green] Enable Recursive Processing (Include subfolders)?", default=False):
+            config.extraction.recursive = True
         
         # 3. Worker Threads
         import os
