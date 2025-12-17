@@ -32,10 +32,17 @@ class PipelineController:
         logging.getLogger('pdfminer').setLevel(logging.ERROR)
 
     @staticmethod
-    def process_chunk(chunk: PDFChunk, config: AppConfig, doc_output_dir: Path) -> str:
+    def process_chunk(chunk: PDFChunk, config: AppConfig, doc_output_dir: Path, validated_watermarks: Optional[set] = None) -> str:
         """
         Process a single chunk of pages.
         Returns the Markdown string.
+        
+        Args:
+            chunk: PDF chunk to process
+            config: Application configuration
+            doc_output_dir: Output directory for this document
+            validated_watermarks: Set of watermark patterns validated by WatermarkAnalyzer
+                                  (patterns that appear on >60% of pages)
         """
         # 1. Initialize Worker Environment (Idempotent-ish check)
         # In ProcessPoolExecutor, this runs every simple task if we don't use an initializer,
@@ -55,7 +62,7 @@ class PipelineController:
         
         # 3. Instantiate Engines
         zone_cleaner = ZoneCleaner(config.cleaning)
-        text_cleaner = TextCleaner(config.cleaning)
+        text_cleaner = TextCleaner(config.cleaning, validated_watermarks=validated_watermarks)
         table_extractor = TableExtractor(config.extraction)  # Legacy fallback
         structure_extractor = StructureExtractor()
         smart_ocr = SmartOCR(config.ocr)

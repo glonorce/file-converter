@@ -14,7 +14,30 @@ class StructureExtractor:
         if not text:
             return text
         # NFC normalization: Composed form (é instead of e + combining accent)
-        return unicodedata.normalize('NFC', text)
+        text = unicodedata.normalize('NFC', text)
+        
+        # Bullet point normalization: Various bullet chars → markdown dash
+        # PDF fonts often encode bullets as #, 9, *, ●, ◦, ▪, etc.
+        bullet_chars = {
+            '•': '-',  # Standard bullet
+            '●': '-',  # Black circle
+            '○': '-',  # White circle  
+            '◦': '-',  # White bullet
+            '▪': '-',  # Black square
+            '▫': '-',  # White square
+            '►': '-',  # Arrow
+            '▶': '-',  # Play symbol
+            '◆': '-',  # Diamond
+            '■': '-',  # Black square
+            '□': '-',  # White square
+            '✓': '-',  # Checkmark
+            '✔': '-',  # Heavy checkmark
+            '→': '-',  # Arrow
+        }
+        for bullet, replacement in bullet_chars.items():
+            text = text.replace(bullet, replacement)
+        
+        return text
 
     def _extract_lines_from_chars(self, page: pdfplumber.page.Page, crop_box=None, ignore_regions=None) -> List[Dict[str, Any]]:
         """

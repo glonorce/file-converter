@@ -16,7 +16,22 @@
 *   **Temiz Okuma:** Gereksiz boşluklardan, headers ve footers gibi tekrarlayan metinlerden arınmış, saf bilgi içerir.
 *   **🔒 %100 Gizlilik:** Tüm işlemler bilgisayarınızda (Local) gerçekleşir. Belgeleriniz asla internete yüklenmez.
 
-## 📦 Kurulum (Adım Adım)
+## � Neden DocuForge?
+
+Cloud tabanlı LLM servisleri (ChatGPT, Claude vb.) PDF işlemede şu sorunları yaşar:
+- **Gizlilik:** Belgeleriniz üçüncü taraf sunuculara yüklenir
+- **Maliyet:** Sayfa/token başına ücretlendirme
+- **Limitler:** Yüksek sayfalı dosyalarda context window sorunu
+- **Hız:** API rate limitleri ve kuyruk bekleme süreleri
+
+**DocuForge bu sorunları çözer:**
+- ✅ **%100 Yerel İşlem** - Verileriniz asla bilgisayarınızdan çıkmaz
+- ✅ **Sınırsız & Ücretsiz** - Binlerce sayfa, sıfır maliyet
+- ✅ **Paralel İşlem** - Çoklu PDF'leri aynı anda dönüştürün
+- ✅ **Akıllı OCR** - Bozuk fontları otomatik algılar ve düzeltir
+- ✅ **Türkçe Optimizasyonu** - Healer motoru Türkçe karakterleri (ş, ğ, ı, ü, ö, ç) akıllıca onarır
+
+## �📦 Kurulum (Adım Adım)
 
 Bu araç güçlü motorlar (OCR, Tablo okuyucu) kullanır. Lütfen sırasıyla uygulayın:
 
@@ -68,6 +83,12 @@ python -m docuforge.main web
 
 Sihirbaz başladığında sizden **PDF Klasörü**, **Çıktı Yeri** ve **Gelişmiş Seçenekler** için onay isteyecektir.
 
+### 🌐 Web Arayüzü Özellikleri
+- **MD Görüntüleme:** İşlem biten dosyalarda 👁 butonuna tıklayarak Markdown'ı tarayıcıda görüntüleyin
+- **HTML İndirme:** Görüntüleme sayfasında "HTML İndir" butonu ile stillenmiş HTML olarak kaydedin
+
+> **İpucu:** Tüm mevcut komutları görmek için: `python -m docuforge.main --help`
+
 ## 🛠️ Ayarlar ve İpuçları
 
 *   **Parallel Workers:** İşlemci çekirdeklerinize göre otomatik önerilir. (Manuel komutta varsayılan: 4).
@@ -76,8 +97,9 @@ Sihirbaz başladığında sizden **PDF Klasörü**, **Çıktı Yeri** ve **Geli�
     *   **Tables:** Tabloları analiz eder.
     *   **Images:** Resimleri ayıklar (Açıksa klasör oluşturur, kapalıysa oluşturmaz).
     *   **Charts (Beta):** Grafikleri ayıklar (Düzensiz çalışabilir, deneyseldir).
-    *   **Recursive Mode:** Alt klasörleri de tarar ve aynı klasör yapısını çıktıda oluşturur.
+    *   **Recursive Mode (CLI):** Alt klasörleri de tarar ve aynı klasör yapısını çıktıda oluşturur.
     *   **Header Sensitivity (0.6):** Sayfa numarası/kitap adı gibi tekrarlayan metinleri silme hassasiyetidir. (0.6 = %60 tekrar ediyorsa sil).
+    *   **Removable Tags:** PDF'den silinmesini istediğiniz metinleri (filigran, watermark vb.) kalıcı listeye ekleyin. CLI veya Web arayüzünden yönetilebilir.
 
 ## 🧠 Geliştirme Yaklaşımı: AI Orkestrasyonu
 
@@ -113,7 +135,22 @@ Bu proje, sadece kod yazmak değil, modern **Sistem Mühendisliği** ve **Yapay 
 *   **For Clarity:** Strips away layout artifacts, repetitive headers, and footers.
 *   **🔒 100% Privacy:** All processing happens locally. No files are uploaded to the cloud.
 
-## 📦 Installation
+## � Why DocuForge?
+
+Cloud-based LLM services (ChatGPT, Claude, etc.) face these issues when processing PDFs:
+- **Privacy:** Your documents are uploaded to third-party servers
+- **Cost:** Per-page or per-token pricing
+- **Limits:** Context window issues with large documents
+- **Speed:** API rate limits and queue delays
+
+**DocuForge solves these problems:**
+- ✅ **100% Local Processing** - Your data never leaves your machine
+- ✅ **Unlimited & Free** - Thousands of pages, zero cost
+- ✅ **Parallel Processing** - Convert multiple PDFs simultaneously
+- ✅ **Smart OCR** - Auto-detects and fixes broken fonts
+- ✅ **Language Optimized** - Healer engine repairs Turkish characters (ş, ğ, ı, ü, ö, ç)
+
+## �📦 Installation
 
 ### 1. Setup & Clone
 Navigate to your desired folder first.
@@ -163,6 +200,12 @@ python -m docuforge.main web
 
 The wizard will ask for your **Input Directory**, **Output Path**, and **Advanced Options**.
 
+### 🌐 Web Interface Features
+- **MD Viewer:** Click the 👁 button on completed files to preview Markdown in browser
+- **HTML Download:** Save as styled HTML using the "HTML Download" button in the preview
+
+> **Tip:** To see all available commands: `python -m docuforge.main --help`
+
 ## 🛠️ Settings & Tips
 
 *   **Parallel Workers:** Automatically optimized based on your CPU cores. (CLI default: 4).
@@ -171,8 +214,9 @@ The wizard will ask for your **Input Directory**, **Output Path**, and **Advance
     *   **Tables:** Extracts data tables.
     *   **Images:** Extracts embedded images (Creates folder only if found).
     *   **Charts (Beta):** Extracts charts/graphs (Experimental, may be irregular).
-    *   **Recursive Mode:** Scans subdirectories and preserves the folder structure in output.
+    *   **Recursive Mode (CLI):** Scans subdirectories and preserves the folder structure in output.
     *   **Header Sensitivity (0.6):** Controls removal of repeated text (headers/footers). 0.6 means "remove if present on 60% of pages".
+    *   **Removable Tags:** Add text patterns (watermarks, etc.) to a persistent blocklist. Manage via CLI or Web UI.
 
 ## 🧠 Development Philosophy: AI Orchestration
 

@@ -33,3 +33,6 @@ Thumbs.db
 debug_healer.py
 docuforge/src/cleaning/dicts/*.txt
 !docuforge/src/cleaning/dicts/.keep
+
+# System Documentation (private)
+SYSTEM_DOCUMENTATION.md

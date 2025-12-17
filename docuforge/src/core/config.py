@@ -16,14 +16,7 @@ class CleaningConfig(BaseModel):
     repeated_text_ratio: float = 0.6
     header_top_percent: float = 0.02 # Reduced from 0.10 to prevent cutting valid text
     footer_bottom_percent: float = 0.05 # Reduced for safety
-    regex_blacklist: List[str] = [
-        r"Google Translate",
-        r"Translated by",
-        r"Original text",
-        r"Machine Translated by Google",
-        r"Bu kitap",  # Too generic? No, user mentioned "gereksiz cümleler". 
-        r"achine Tranşlated by Google"
-    ]
+    regex_blacklist: List[str] = []  # Empty by default - user adds watermarks via CLI/Web
 
 class ExtractionConfig(BaseModel):
     tables_enabled: bool = True

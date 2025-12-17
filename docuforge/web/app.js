@@ -27,7 +27,10 @@ const i18n = {
         ready: "Ready",
         running: "Running",
         complete: "Complete",
-        pages: "pages"
+        pages: "pages",
+        tags: "Removable Tags",
+        warning_line1: "Output may contain errors",
+        warning_line2: "Verification recommended"
     },
     tr: {
         input_title: "Kaynak Dosyalar",
@@ -55,7 +58,10 @@ const i18n = {
         ready: "Hazır",
         running: "Çalışıyor",
         complete: "Tamamlandı",
-        pages: "sayfa"
+        pages: "sayfa",
+        tags: "Silinecek Etiketler",
+        warning_line1: "Çıktıda hatalar olabilir",
+        warning_line2: "Kontrol etmenizde fayda var"
     }
 };
 
@@ -149,7 +155,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     function addFiles(files) {
         if (!files.length) return;
         const newFiles = Array.from(files).filter(f => f.type === 'application/pdf');
+
+        // Clear completed/processed files when adding new ones
+        selectedFiles = selectedFiles.filter(f => !f._done && !f._error);
         selectedFiles = [...selectedFiles, ...newFiles];
+
+        // Reset stats for fresh start
+        startTime = null;
+        document.getElementById('statSpeed').textContent = '0';
+        document.getElementById('counterCurrent').textContent = '0';
+        document.getElementById('elapsedTime').textContent = '00:00';
 
         if (selectedFiles.length > 0) {
             dropInput.classList.add('selected');
@@ -162,16 +177,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ===== Output Selection =====
     dropOutput.onclick = async () => {
+        if (isProcessing) return;  // Don't allow change during processing
         try {
             const res = await fetch('/api/browse', { method: 'POST' });
             const data = await res.json();
-            if (data.path) {
+            if (data.path && data.path.trim() !== '') {
                 selectedPath = data.path;
                 const folderName = selectedPath.split(/[/\\]/).pop();
-                document.getElementById('pathSummary').innerHTML = `<strong>${folderName}</strong>`;
+                document.getElementById('pathSummary').innerHTML = `<strong>${folderName}</strong><br><small style="opacity:0.6">Click to change</small>`;
                 dropOutput.classList.add('selected');
                 updateState();
             }
+            // If cancelled (empty path), just do nothing - allow retry
         } catch (e) {
             console.error('Browse failed:', e);
         }
@@ -211,6 +228,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (isDone) icon = '✅';
             if (isError) icon = '❌';
 
+            // Show remove button only if not processing and not done
+            const showRemove = !isProcessing && !isDone && !file._processing;
+            // Show view button only if done
+            const showView = isDone && file._outputPath;
+
             card.innerHTML = `
                 <div class="f-icon">${icon}</div>
                 <div class="f-info">
@@ -220,21 +242,80 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div class="f-progress">
                     <div class="f-fill" id="fill-${index}" style="width: ${progress}%"></div>
                 </div>
+                <div class="f-actions">
+                    ${showView ? `<button class="f-view" data-path="${file._outputPath}" title="Görüntüle">👁</button>` : ''}
+                    ${showRemove ? `<button class="f-remove" data-index="${index}" title="Remove">×</button>` : ''}
+                </div>
             `;
             fileListEl.appendChild(card);
+        });
+
+        // Add remove handlers
+        document.querySelectorAll('.f-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.index);
+                selectedFiles.splice(idx, 1);
+                renderQueue();
+                updateStats();
+                updateState();
+                if (selectedFiles.length === 0) {
+                    dropInput.classList.remove('selected');
+                    document.getElementById('fileSummary').innerHTML = '';
+                } else {
+                    document.getElementById('fileSummary').innerHTML = `<strong>${selectedFiles.length}</strong> files loaded`;
+                }
+            });
+        });
+
+        // Add view handlers - open MD in new tab
+        document.querySelectorAll('.f-view').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const mdPath = e.target.dataset.path;
+                if (mdPath) {
+                    window.open(`/api/view-md?path=${encodeURIComponent(mdPath)}`, '_blank');
+                }
+            });
         });
     }
 
     // ===== Stats Update =====
     function updateStats() {
-        document.getElementById('statTotal').textContent = selectedFiles.length;
+        const total = selectedFiles.length;
         const processed = selectedFiles.filter(f => f._done).length;
+
+        // Update stats cards
+        document.getElementById('statTotal').textContent = total;
         document.getElementById('statProcessed').textContent = processed;
+
+        // Update large counter
+        document.getElementById('counterCurrent').textContent = processed;
+        document.getElementById('counterTotal').textContent = total;
 
         if (startTime && processed > 0) {
             const elapsed = (Date.now() - startTime) / 1000;
             const avgSpeed = (elapsed / processed).toFixed(1);
             document.getElementById('statSpeed').textContent = avgSpeed;
+        }
+    }
+
+    // ===== Elapsed Time Timer =====
+    let elapsedInterval = null;
+
+    function startElapsedTimer() {
+        const elapsedEl = document.getElementById('elapsedTime');
+        elapsedInterval = setInterval(() => {
+            if (!startTime) return;
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const secs = (elapsed % 60).toString().padStart(2, '0');
+            elapsedEl.textContent = `${mins}:${secs}`;
+        }, 1000);
+    }
+
+    function stopElapsedTimer() {
+        if (elapsedInterval) {
+            clearInterval(elapsedInterval);
+            elapsedInterval = null;
         }
     }
 
@@ -295,6 +376,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         startTime = Date.now();
         updateState();
         setStatus(i18n[currentLang].running);
+
+        // Start elapsed timer and reset counter
+        document.getElementById('elapsedTime').textContent = '00:00';
+        startElapsedTimer();
+        updateStats();
 
         // Show global progress
         globalProgress.classList.add('active');
@@ -369,6 +455,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         isProcessing = false;
+        stopElapsedTimer();
         setStatus(i18n[currentLang].complete);
         updateState();
         updateStats();
@@ -401,8 +488,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 break;
 
             case 'file_done':
+                // Save output path for View button
+                if (event.path) {
+                    selectedFiles[file_idx]._outputPath = event.path;
+                }
                 updateFileUI(file_idx, i18n[currentLang].done, 100, true, false);
                 updateStats();
+                renderQueue();  // Re-render to show View button
                 break;
 
             case 'file_error':
@@ -419,4 +511,84 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initial translations
     applyTranslations();
+
+    // ===== Tag Management =====
+    const tagInput = document.getElementById('tagInput');
+    const addTagBtn = document.getElementById('addTagBtn');
+    const tagList = document.getElementById('tagList');
+
+    // Load existing tags
+    async function loadTags() {
+        try {
+            const resp = await fetch('/api/tags');
+            const data = await resp.json();
+            renderTags(data.tags || []);
+        } catch (e) {
+            console.error('Failed to load tags:', e);
+        }
+    }
+
+    // Render tags as chips
+    function renderTags(tags) {
+        tagList.innerHTML = '';
+        tags.forEach(tag => {
+            const chip = document.createElement('div');
+            chip.className = 'tag-chip';
+            chip.innerHTML = `
+                <span>${tag}</span>
+                <button class="remove-tag" title="Remove">&times;</button>
+            `;
+            chip.querySelector('.remove-tag').addEventListener('click', () => removeTag(tag));
+            tagList.appendChild(chip);
+        });
+    }
+
+    // Add tag
+    async function addTag() {
+        const pattern = tagInput.value.trim();
+        if (!pattern) return;
+
+        try {
+            const formData = new FormData();
+            formData.append('pattern', pattern);
+
+            const resp = await fetch('/api/tags', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await resp.json();
+
+            if (data.success) {
+                tagInput.value = '';
+                loadTags();
+            }
+        } catch (e) {
+            console.error('Failed to add tag:', e);
+        }
+    }
+
+    // Remove tag
+    async function removeTag(pattern) {
+        try {
+            const formData = new FormData();
+            formData.append('pattern', pattern);
+
+            await fetch('/api/tags', {
+                method: 'DELETE',
+                body: formData
+            });
+            loadTags();
+        } catch (e) {
+            console.error('Failed to remove tag:', e);
+        }
+    }
+
+    // Event listeners
+    addTagBtn.addEventListener('click', addTag);
+    tagInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addTag();
+    });
+
+    // Load tags on startup
+    loadTags();
 });

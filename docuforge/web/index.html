@@ -40,6 +40,13 @@
                 </div>
             </div>
             <div class="header-controls">
+                <div id="warningBox" class="info-box" title="Info">
+                    <span class="info-icon">ℹ</span>
+                    <div class="info-text">
+                        <span data-i18n="warning_line1">Output may contain errors</span>
+                        <span data-i18n="warning_line2">Verification recommended</span>
+                    </div>
+                </div>
                 <button id="langBtn" class="icon-btn" title="Language">
                     <span id="langLabel">EN</span>
                 </button>
@@ -111,39 +118,58 @@
                             <button id="chartSwitch" class="toggle-switch"></button>
                         </div>
                     </div>
-                </div>
 
-                <!-- Stats Panel -->
-                <div class="panel-section stats-section">
-                    <h3 class="section-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
-                            height="16">
-                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                        </svg>
-                        <span data-i18n="stats">Statistics</span>
-                    </h3>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <span class="stat-value" id="statTotal">0</span>
-                            <span class="stat-label" data-i18n="total_files">Files</span>
+                    <!-- Tag Management Section -->
+                    <div class="tag-management">
+                        <div class="control-header">
+                            <label>🏷️ <span data-i18n="tags">Removable Tags</span></label>
                         </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="statProcessed">0</span>
-                            <span class="stat-label" data-i18n="processed">Done</span>
+                        <div class="tag-input-group">
+                            <input type="text" id="tagInput" placeholder="e.g., 'Watermark'" class="tag-input">
+                            <button id="addTagBtn" class="tag-btn" title="Add Tag">+</button>
                         </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="statSpeed">0</span>
-                            <span class="stat-label" data-i18n="speed">sec/file</span>
-                        </div>
+                        <div id="tagList" class="tag-list"></div>
                     </div>
-                </div>
 
-                <!-- Version -->
-                <div class="version-info">
-                    <span>v2.2.0</span>
-                    <span class="status-dot"></span>
-                    <span id="statusText" data-i18n="ready">Ready</span>
-                </div>
+                    <!-- Stats Panel -->
+                    <div class="panel-section stats-section">
+                        <h3 class="section-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
+                                height="16">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                            </svg>
+                            <span data-i18n="stats">Statistics</span>
+                        </h3>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <span class="stat-value" id="statTotal">0</span>
+                                <span class="stat-label" data-i18n="total_files">Files</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-value" id="statProcessed">0</span>
+                                <span class="stat-label" data-i18n="processed">Done</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-value" id="statSpeed">0</span>
+                                <span class="stat-label" data-i18n="speed">sec/file</span>
+                            </div>
+                        </div>
+
+                        <!-- Large Progress Counter -->
+                        <div class="progress-counter">
+                            <span class="counter-current" id="counterCurrent">0</span>
+                            <span class="counter-sep">/</span>
+                            <span class="counter-total" id="counterTotal">0</span>
+                        </div>
+                        <div class="elapsed-time" id="elapsedTime">00:00</div>
+                    </div>
+
+                    <!-- Version -->
+                    <div class="version-info">
+                        <span>DocuForge</span>
+                        <span class="status-dot"></span>
+                        <span id="statusText" data-i18n="ready">Ready</span>
+                    </div>
             </aside>
 
             <!-- Center Panel - Workspace -->

@@ -82,5 +82,75 @@ class InteractiveWizard:
             config.extraction.charts_enabled = Confirm.ask("Enable Chart Extraction (Experimental)?", default=False) 
             config.cleaning.repeated_text_ratio = float(Prompt.ask("Header/Footer Removal Sensitivity (0.0-1.0)", default="0.6"))
 
+        if Confirm.ask("[bold yellow]?[/bold yellow] Configure Removable Tags? (e.g., 'Watermark')", default=False):
+            tag_result = self._manage_tags()
+            console.print(f"[green]✓ Tag settings saved ({tag_result} custom tags)[/green]")
+        
         console.print("\n[bold green]Configuration Ready![/bold green]")
         return config
+    
+    def _manage_tags(self) -> int:
+        """Interactive tag management menu. Returns tag count."""
+        from docuforge.src.core.tag_manager import TagManager
+        
+        manager = TagManager()
+        
+        while True:
+            menu_lines = [
+                "",
+                "[bold cyan]Tag Management:[/bold cyan]",
+                "  [1] View current tags",
+                "  [2] Add new tag",
+                "  [3] Remove tag",
+                "  [4] Save & Continue"
+            ]
+            for line in menu_lines:
+                console.print(line)
+            
+            choice = Prompt.ask("Select option", choices=["1", "2", "3", "4"], default="4")
+            
+            if choice == "1":
+                # View tags
+                tags = manager.list_tags()
+                if not tags:
+                    console.print("[yellow]No custom tags defined.[/yellow]")
+                else:
+                    console.print("[cyan]Current tags:[/cyan]")
+                    for i, tag in enumerate(tags, 1):
+                        console.print(f"  {i}. {tag}")
+            
+            elif choice == "2":
+                # Add tag
+                pattern = Prompt.ask("Enter tag pattern to remove")
+                if pattern.strip():
+                    if manager.add_tag(pattern.strip()):
+                        console.print(f"[green]✓ Added: {pattern}[/green]")
+                    else:
+                        console.print(f"[yellow]Already exists: {pattern}[/yellow]")
+            
+            elif choice == "3":
+                # Remove tag
+                tags = manager.list_tags()
+                if not tags:
+                    console.print("[yellow]No tags to remove.[/yellow]")
+                else:
+                    console.print("[cyan]Current tags:[/cyan]")
+                    for i, tag in enumerate(tags, 1):
+                        console.print(f"  {i}. {tag}")
+                    
+                    idx_str = Prompt.ask("Enter tag number to remove")
+                    try:
+                        idx = int(idx_str)
+                        if 1 <= idx <= len(tags):
+                            removed = tags[idx - 1]
+                            manager.remove_tag(removed)
+                            console.print(f"[green]✓ Removed: {removed}[/green]")
+                        else:
+                            console.print("[red]Invalid number.[/red]")
+                    except ValueError:
+                        console.print("[red]Please enter a number.[/red]")
+            
+            elif choice == "4":
+                # Save & Continue
+                return len(manager.list_tags())
+
