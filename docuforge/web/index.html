@@ -108,7 +108,11 @@
                                 <span class="toggle-icon">🔍</span>
                                 <span data-i18n="ocr">OCR Mode</span>
                             </div>
-                            <button id="ocrSwitch" class="toggle-switch active"></button>
+                            <div class="ocr-selector" id="ocrSelector">
+                                <button class="ocr-btn" data-value="off" data-i18n="ocr_off">Off</button>
+                                <button class="ocr-btn active" data-value="auto" data-i18n="ocr_auto">Auto</button>
+                                <button class="ocr-btn" data-value="on" data-i18n="ocr_on">On</button>
+                            </div>
                         </div>
                         <div class="toggle-item">
                             <div class="toggle-info">

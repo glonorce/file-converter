@@ -1163,3 +1163,37 @@ body {
     opacity: 0.7;
     font-size: 0.65rem;
 }
+
+/* OCR Selector - 3-state button group */
+.ocr-selector {
+    display: flex;
+    gap: 2px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 2px;
+    border: 1px solid var(--border-color);
+}
+
+.ocr-btn {
+    padding: 4px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.ocr-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.ocr-btn.active {
+    background: var(--accent-primary);
+    color: white;
+    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+}

@@ -30,7 +30,10 @@ const i18n = {
         pages: "pages",
         tags: "Removable Tags",
         warning_line1: "Output may contain errors",
-        warning_line2: "Verification recommended"
+        warning_line2: "Verification recommended",
+        ocr_off: "Off",
+        ocr_auto: "Auto",
+        ocr_on: "On"
     },
     tr: {
         input_title: "Kaynak Dosyalar",
@@ -61,7 +64,10 @@ const i18n = {
         pages: "sayfa",
         tags: "Silinecek Etiketler",
         warning_line1: "Çıktıda hatalar olabilir",
-        warning_line2: "Kontrol etmenizde fayda var"
+        warning_line2: "Kontrol etmenizde fayda var",
+        ocr_off: "Kapalı",
+        ocr_auto: "Otomatik",
+        ocr_on: "Açık"
     }
 };
 
@@ -107,7 +113,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('tableSwitch').onclick = () => toggleSwitch('tableSwitch');
     document.getElementById('imageSwitch').onclick = () => toggleSwitch('imageSwitch');
     document.getElementById('chartSwitch').onclick = () => toggleSwitch('chartSwitch');
-    document.getElementById('ocrSwitch').onclick = () => toggleSwitch('ocrSwitch');
+
+    // OCR Selector - 3-state (off/auto/on)
+    document.querySelectorAll('.ocr-btn').forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll('.ocr-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        };
+    });
 
     // ===== Theme Toggle =====
     document.getElementById('themeBtn').onclick = () => {
@@ -130,6 +143,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
             if (i18n[currentLang][key]) el.textContent = i18n[currentLang][key];
+        });
+
+        // Adjust OCR button size for Turkish (longer words)
+        const ocrBtns = document.querySelectorAll('.ocr-btn');
+        ocrBtns.forEach(btn => {
+            btn.style.fontSize = currentLang === 'tr' ? '0.6rem' : '0.7rem';
+            btn.style.padding = currentLang === 'tr' ? '4px 8px' : '4px 12px';
         });
     }
 
@@ -391,8 +411,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const tables = document.getElementById('tableSwitch').classList.contains('active');
         const images = document.getElementById('imageSwitch').classList.contains('active');
         const charts = document.getElementById('chartSwitch').classList.contains('active');
-        // OCR Logic: Active = 'auto', Inactive = 'off' (User Request)
-        const ocr = document.getElementById('ocrSwitch').classList.contains('active') ? 'auto' : 'off';
+        // OCR: Get value from active button (off/auto/on)
+        const ocrActiveBtn = document.querySelector('.ocr-btn.active');
+        const ocr = ocrActiveBtn ? ocrActiveBtn.dataset.value : 'auto';
 
         // Prepare FormData with ALL files
         const formData = new FormData();
@@ -591,4 +612,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Load tags on startup
     loadTags();
+
+    // Apply translations on startup (for OCR button sizing)
+    applyTranslations();
 });

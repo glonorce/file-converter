@@ -16,6 +16,12 @@ class SmartOCR:
     def process_page(self, pdf_path: Path, page_num: int, original_text: str) -> str:
         """
         Analyzes original text quality. If poor, runs OCR on that specific page.
+        
+        Auto mode logic:
+        1. If no text at all (image-only page) → OCR
+        2. If very little text (<50 chars) → OCR
+        3. If broken text pattern detected → OCR
+        4. Otherwise → use original text
         """
         if self.config.enable == "off":
             return original_text
@@ -23,29 +29,23 @@ class SmartOCR:
         if self.config.enable == "on":
             return self._run_ocr(pdf_path, page_num)
 
-        # "auto" mode logic
-        # 1. Check text length/density
-        msg_density = len(original_text.strip())
+        # "auto" mode - Smart OCR detection
+        # Only run OCR on pages that truly need it (image-only or very low text)
         
-        # If text is extremely short (e.g. < 50 chars for a full page), it's likely a scan or corrupted
-        if msg_density < 50: 
-            logger.info(f"Page {page_num}: Low text density ({msg_density} chars). Triggering Smart OCR.")
+        # 1. Check if page has ANY selectable text at all
+        # If original_text is empty or whitespace-only, this is an image-only page
+        stripped_text = original_text.strip()
+        if not stripped_text:
+            logger.info(f"Page {page_num}: No selectable text found (image-only page). Triggering OCR.")
             return self._run_ocr(pdf_path, page_num)
-            
-        # 2. Check for "Broken Text" (e.g. "G ü ç" or "s i s t e m") using regex
-        # If we see many single characters separated by spaces, the text layer is likely corrupted.
-        import re
-        broken_pattern = re.compile(r'\b\w\s\w\s\w\b')
-        broken_matches = len(broken_pattern.findall(original_text))
         
-        # If we find more than N matches, trigger OCR
-        threshold = self.config.broken_text_threshold
-        # If we find more than N matches, trigger OCR
-        threshold = self.config.broken_text_threshold
-        if broken_matches > threshold:
-            logger.debug(f"Page {page_num}: Detected broken text encoding ({broken_matches} > {threshold}). Triggering Smart OCR.")
+        # 2. Check text length/density
+        # If text is extremely short (e.g. < 50 chars for a full page), it's likely a scan
+        if len(stripped_text) < 50: 
+            logger.info(f"Page {page_num}: Low text density ({len(stripped_text)} chars). Triggering Smart OCR.")
             return self._run_ocr(pdf_path, page_num)
 
+        # Page has sufficient selectable text - no OCR needed
         return original_text
 
     def _run_ocr(self, pdf_path: Path, page_num: int) -> str:

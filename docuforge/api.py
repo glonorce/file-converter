@@ -431,12 +431,17 @@ async def convert_pdfs_stream(
                     chunks = list(loader.stream_chunks(input_path))
                     total_pages = sum(chunk.end_page - chunk.start_page + 1 for chunk in chunks)
                     
+                    # Watermark Analysis - Pre-scan to find true watermarks (>60% of pages)
+                    from docuforge.src.cleaning.watermark_analyzer import WatermarkAnalyzer
+                    analyzer = WatermarkAnalyzer(input_path)
+                    validated_watermarks = analyzer.analyze()
+                    
                     results = []
                     pages_done = 0
                     
                     with ProcessPoolExecutor(max_workers=workers) as executor:
                         futures = {
-                            executor.submit(PipelineController.process_chunk, chunk, config, doc_output_dir): chunk
+                            executor.submit(PipelineController.process_chunk, chunk, config, doc_output_dir, validated_watermarks): chunk
                             for chunk in chunks
                         }
                         

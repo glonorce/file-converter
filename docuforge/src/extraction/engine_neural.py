@@ -1020,7 +1020,9 @@ class NeuralSpatialEngine:
             
             # Pre-filter: Numeric content ratio check
             # Tables typically contain high ratio of numbers (financial data, statistics)
-            # If page has ≤20% digits, skip table detection (text-heavy page)
+            # If page has ≤15% digits, skip table detection (text-heavy page)
+            # If page has >50% digits and no table found, force table detection
+            digit_ratio = 0.0
             if words:
                 all_text = ''.join(w.get('text', '') for w in words)
                 if all_text:
@@ -1028,7 +1030,7 @@ class NeuralSpatialEngine:
                     total_chars = len(all_text.replace(' ', ''))
                     if total_chars > 0:
                         digit_ratio = digit_count / total_chars
-                        if digit_ratio <= 0.20:
+                        if digit_ratio <= 0.15:
                             # Text-heavy page - skip table detection entirely
                             return tables_md, charts, table_bboxes
             
@@ -1081,17 +1083,23 @@ class NeuralSpatialEngine:
                     tables_md.append(md)
             
             # Step 5: If no tables found, try full-page borderless detection
+            # Also force detection if digit_ratio > 50% (number-heavy page likely contains table)
             if not tables_md and not charts:
+                # Check if this is a high-digit page that should be treated as table
+                force_table = digit_ratio > 0.50
+                
                 # Try to detect any tabular structure in the entire page
                 full_page_region = TableRegion(
                     bbox=BBox(0, page.height * 0.1, page.width, page.height * 0.95),
                     is_bordered=False,
-                    confidence=0.5
+                    confidence=0.5 if not force_table else 0.8
                 )
                 
                 # Create grid from whitespace rivers
                 rivers = self.vision_cortex.find_whitespace_rivers(words, page.width)
-                if len(rivers) >= 3:  # At least 2 columns
+                # Lower threshold for high-digit pages (2 columns min instead of 3)
+                min_rivers = 2 if force_table else 3
+                if len(rivers) >= min_rivers:
                     full_page_region.grid = GridStructure(
                         vertical_lines=[
                             GridLine(r, 0, page.height, False) for r in rivers
