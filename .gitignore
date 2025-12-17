@@ -36,3 +36,5 @@ docuforge/src/cleaning/dicts/*.txt
 
 # System Documentation (private)
 SYSTEM_DOCUMENTATION.md
+DEV_NOTES.md
+debug_*.txt

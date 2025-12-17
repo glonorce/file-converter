@@ -51,6 +51,36 @@ class TableExtractor:
         if not self.config.tables_enabled:
             return []
         
+        # Pre-filter: Numeric content ratio check
+        # Tables typically contain high ratio of numbers (financial data, statistics)
+        # If page has ≤20% digits, skip table detection (text-heavy page)
+        try:
+            check_page = page
+            pdf_handle = None
+            if check_page is None:
+                pdf_handle = pdfplumber.open(pdf_path)
+                if page_num <= len(pdf_handle.pages):
+                    check_page = pdf_handle.pages[page_num - 1]
+            
+            if check_page:
+                words = check_page.extract_words()
+                if words:
+                    all_text = ''.join(w.get('text', '') for w in words)
+                    if all_text:
+                        digit_count = sum(1 for c in all_text if c.isdigit())
+                        total_chars = len(all_text.replace(' ', ''))
+                        if total_chars > 0:
+                            digit_ratio = digit_count / total_chars
+                            if digit_ratio <= 0.20:
+                                if pdf_handle:
+                                    pdf_handle.close()
+                                return []  # Skip table detection for text-heavy pages
+            
+            if pdf_handle:
+                pdf_handle.close()
+        except Exception:
+            pass  # If check fails, continue with normal table detection
+        
         all_tables = []
         
         # Strategy 1: Try Camelot FIRST (better for complex bordered tables)

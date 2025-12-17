@@ -1018,6 +1018,20 @@ class NeuralSpatialEngine:
             # Get raw characters for better word reconstruction
             chars = page.chars or []
             
+            # Pre-filter: Numeric content ratio check
+            # Tables typically contain high ratio of numbers (financial data, statistics)
+            # If page has ≤20% digits, skip table detection (text-heavy page)
+            if words:
+                all_text = ''.join(w.get('text', '') for w in words)
+                if all_text:
+                    digit_count = sum(1 for c in all_text if c.isdigit())
+                    total_chars = len(all_text.replace(' ', ''))
+                    if total_chars > 0:
+                        digit_ratio = digit_count / total_chars
+                        if digit_ratio <= 0.20:
+                            # Text-heavy page - skip table detection entirely
+                            return tables_md, charts, table_bboxes
+            
             # Step 2: Check for chart-dominant page
             if self.vision_cortex.detect_chart_indicators(layout):
                 logger.debug(f"Page {page_num}: Chart indicators detected")
