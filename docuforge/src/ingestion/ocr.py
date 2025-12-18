@@ -18,6 +18,55 @@ from docuforge.src.core.config import OCRConfig
 import re
 
 
+class OcrQualityDictionary:
+    """Manages a dictionary for OCR quality checks (from OCRmyPDF).
+    
+    Validates OCR output by measuring how many words match a known dictionary.
+    """
+    
+    def __init__(self, wordlist: set = None):
+        """Construct a dictionary from a set of words."""
+        if wordlist is None:
+            # Default Turkish + English common words
+            wordlist = {
+                # Turkish common
+                've', 'bir', 'bu', 'için', 'ile', 'da', 'de', 'ne', 'var', 'olan',
+                'gibi', 'daha', 'çok', 'nasıl', 'neden', 'kadar', 'sonra', 'önce',
+                'olarak', 'arasında', 'üzerinde', 'ise', 'ya', 'veya', 'hem', 'ancak',
+                # English common
+                'the', 'and', 'for', 'is', 'in', 'to', 'of', 'a', 'an', 'it',
+                'that', 'this', 'with', 'from', 'have', 'are', 'was', 'were', 'be',
+                # Turkish economics (subset)
+                'ekonomi', 'enflasyon', 'faiz', 'bütçe', 'vergi', 'gelir', 'yatırım',
+                'piyasa', 'fiyat', 'talep', 'arz', 'üretim', 'tüketim', 'büyüme',
+            }
+        self.dictionary = wordlist
+    
+    def measure_words_matched(self, ocr_text: str) -> float:
+        """Check how many unique words in OCR text match dictionary.
+        
+        Returns:
+            Ratio of matched words (0.0 to 1.0)
+        """
+        # Clean text: remove numbers and punctuation
+        text = re.sub(r"[0-9_]+", ' ', ocr_text)
+        text = re.sub(r'\W+', ' ', text)
+        
+        # Get unique words (min length 3)
+        text_words = {w for w in text.split() if len(w) >= 3}
+        
+        if not text_words:
+            return 0.0
+        
+        matches = 0
+        for word in text_words:
+            # Check exact match or lowercase match
+            if word in self.dictionary or word.lower() in self.dictionary:
+                matches += 1
+        
+        return matches / len(text_words) if text_words else 0.0
+
+
 class SmartOCR:
     """Enhanced OCR engine with adaptive strategies."""
     
@@ -38,6 +87,9 @@ class SmartOCR:
         self.config = config
         # Use best models if available
         self._setup_languages()
+        self._setup_user_words()
+        # Quality dictionary for OCR validation (OCRmyPDF technique)
+        self._quality_dict = OcrQualityDictionary()
     
     def _setup_languages(self):
         """Setup language configuration."""
@@ -45,6 +97,19 @@ class SmartOCR:
         # So we just use the configured languages directly
         self._langs = self.config.langs
         logger.debug(f"OCR using languages: {self._langs}")
+    
+    def _setup_user_words(self):
+        """Setup user words file for better OCR accuracy (OCRmyPDF technique)."""
+        # Look for user words file in docuforge/data/
+        import os
+        module_dir = Path(__file__).parent.parent.parent
+        self._user_words_path = module_dir / "data" / "turkish_economics.txt"
+        
+        if self._user_words_path.exists():
+            logger.debug(f"Using user-words: {self._user_words_path}")
+        else:
+            self._user_words_path = None
+            logger.debug("No user-words file found")
 
     def process_page(self, pdf_path: Path, page_num: int, original_text: str) -> str:
         """
@@ -124,52 +189,38 @@ class SmartOCR:
         return False
 
     def _run_ocr(self, pdf_path: Path, page_num: int) -> str:
-        """Run OCR with adaptive strategy."""
+        """Run OCR with adaptive strategy and preprocessing fallback."""
         from PIL import ImageFilter, Image, ImageEnhance, ImageOps
         from io import BytesIO
         
         try:
-            # Get image (embedded or rendered)
-            ocr_image = self._extract_embedded_image(pdf_path, page_num)
+            # Render page at 300 DPI (better for OCR than 400)
+            images = convert_from_path(
+                str(pdf_path), 
+                first_page=page_num, 
+                last_page=page_num,
+                dpi=300
+            )
             
-            if ocr_image is None:
-                images = convert_from_path(
-                    str(pdf_path), 
-                    first_page=page_num, 
-                    last_page=page_num,
-                    dpi=400
-                )
-                if not images:
-                    return ""
+            if images:
                 ocr_image = images[0]
+            else:
+                # Fallback to embedded image
+                ocr_image = self._extract_embedded_image(pdf_path, page_num)
+                if ocr_image is None:
+                    return ""
             
-            # Preprocess
-            processed = self._preprocess_image(ocr_image)
+            # Strategy: Try simple grayscale first (Tesseract Sauvola works best on raw grayscale)
+            simple_processed = self._simple_preprocess(ocr_image)
+            best_text, best_score = self._ocr_with_modes(simple_processed)
             
-            # Adaptive OCR - try multiple PSM modes
-            best_text = ""
-            best_score = 0
-            
-            for psm in self.PSM_MODES:
-                try:
-                    config = f"--psm {psm}"
-                    text = pytesseract.image_to_string(
-                        processed, 
-                        lang=self._langs,
-                        config=config
-                    )
-                    
-                    # Score by word count and quality
-                    score = self._score_ocr_result(text)
-                    if score > best_score:
-                        best_score = score
-                        best_text = text
-                        
-                        # Early exit if good enough
-                        if score > 50:
-                            break
-                except:
-                    continue
+            # If poor result, try advanced preprocessing
+            if best_score < 40:
+                processed = self._preprocess_image(ocr_image)
+                adv_text, adv_score = self._ocr_with_modes(processed)
+                if adv_score > best_score:
+                    best_text = adv_text
+                    best_score = adv_score
             
             # Post-process
             result = self._clean_ocr_output(best_text)
@@ -184,15 +235,194 @@ class SmartOCR:
             logger.debug(f"Page {page_num}: OCR failed: {e}")
             return ""
     
-    def _preprocess_image(self, img) -> 'Image':
-        """Smart preprocessing based on image characteristics."""
-        from PIL import ImageFilter, Image, ImageEnhance, ImageOps
+    def _ocr_with_modes(self, processed_image) -> tuple:
+        """Multi-pass OCR with Sauvola thresholding and user-words for best results.
         
-        # Convert to RGB if needed
+        Uses OCRmyPDF techniques:
+        - Multiple thresholding strategies
+        - User words dictionary for Turkish economics terms
+        - Early exit on high confidence
+        """
+        best_text = ""
+        best_score = 0
+        
+        # Build user-words config if available
+        user_words_config = ""
+        if self._user_words_path and self._user_words_path.exists():
+            user_words_config = f" --user-words {self._user_words_path}"
+        
+        # Multi-pass strategies (ordered by speed, most common first)
+        strategies = [
+            # Pass 1: Default (fast, good for clean text)
+            f"--oem 1 --psm 6{user_words_config}",
+            # Pass 2: Sauvola thresholding (best for colored backgrounds)
+            f"--oem 1 --psm 6 -c thresholding_method=2 -c thresholding_kfactor=0.3{user_words_config}",
+            # Pass 3: Aggressive Sauvola (for difficult images)
+            f"--oem 1 --psm 6 -c thresholding_method=2 -c thresholding_kfactor=0.2{user_words_config}",
+            # Pass 4: Sparse text mode (for scattered text)
+            f"--oem 1 --psm 11 -c thresholding_method=2 -c thresholding_kfactor=0.3{user_words_config}",
+        ]
+        
+        for config in strategies:
+            try:
+                text = pytesseract.image_to_string(
+                    processed_image, 
+                    lang=self._langs,
+                    config=config
+                )
+                
+                score = self._score_ocr_result(text)
+                if score > best_score:
+                    best_score = score
+                    best_text = text
+                    
+                    # Early exit if excellent result
+                    if score > 80:
+                        break
+            except:
+                continue
+        
+        return best_text, best_score
+    
+    def _simple_preprocess(self, img):
+        """Minimal preprocessing: Grayscale only - let Tesseract's Sauvola handle thresholding.
+        
+        Note: Bilateral+CLAHE was tested but damages some pages (e.g. page 17 gibberish).
+        Raw grayscale with Tesseract's internal Sauvola gives best results.
+        """
+        import cv2
+        import numpy as np
+        from PIL import Image
+        
+        # Convert PIL to numpy
+        if hasattr(img, 'mode'):
+            if img.mode == 'RGBA':
+                img = img.convert('RGB')
+            img_np = np.array(img)
+        else:
+            img_np = img
+        
+        # Convert to grayscale
+        if len(img_np.shape) == 3:
+            gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img_np
+        
+        # Scale up small images only
+        h, w = gray.shape[:2]
+        if w < 1000 or h < 1000:
+            scale = max(2, 1500 // min(w, h))
+            gray = cv2.resize(gray, (w * scale, h * scale), interpolation=cv2.INTER_LANCZOS4)
+        
+        # Return grayscale - Tesseract's Sauvola thresholding will handle the rest
+        return Image.fromarray(gray)
+    
+    def _get_deskew_angle(self, img) -> float:
+        """Get deskew angle using Tesseract PSM 2 (OCRmyPDF technique).
+        
+        This is more accurate than Hough transform as Tesseract analyzes
+        actual text lines rather than arbitrary edges.
+        
+        Returns:
+            Deskew angle in degrees (positive = counterclockwise rotation needed)
+        """
+        from math import pi
+        import tempfile
+        import os
+        
+        try:
+            # Save image to temp file for Tesseract
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+                temp_path = f.name
+                img.save(temp_path)
+            
+            # Use PSM 2 to get deskew angle (OCRmyPDF technique)
+            output = pytesseract.image_to_osd(
+                temp_path, 
+                config='--psm 0',
+                output_type=pytesseract.Output.DICT
+            )
+            
+            # Get rotation angle
+            rotate_angle = output.get('rotate', 0)
+            
+            # Clean up temp file
+            os.unlink(temp_path)
+            
+            logger.debug(f"Tesseract deskew angle: {rotate_angle}°")
+            return float(rotate_angle)
+            
+        except Exception as e:
+            logger.debug(f"Deskew detection failed: {e}")
+            return 0.0
+    
+    def _deskew_image(self, img):
+        """Detect and correct skew using Tesseract (OCRmyPDF technique).
+        
+        Uses Tesseract's internal text line analysis for more accurate
+        deskew than Hough transform edge detection.
+        """
+        from PIL import Image, ImageColor
+        
+        angle = self._get_deskew_angle(img)
+        
+        if abs(angle) < 0.5:  # Skip tiny corrections
+            return img
+        
+        if angle == 0:
+            return img
+        
+        # Rotate to correct the skew
+        # Use BICUBIC resampling and white fill (OCRmyPDF technique)
+        deskewed = img.rotate(
+            angle,
+            resample=Image.Resampling.BICUBIC,
+            expand=True,
+            fillcolor='white'
+        )
+        
+        logger.debug(f"Applied deskew correction: {angle}°")
+        return deskewed
+    
+    def _apply_threshold(self, img_cv):
+        """Apply Otsu binarization for cleaner text."""
+        import cv2
+        
+        if len(img_cv.shape) == 3:
+            gray = cv2.cvtColor(img_cv, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img_cv
+        
+        # Otsu's binarization
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        return binary
+    
+    def _remove_noise(self, img_cv):
+        """Remove salt-and-pepper noise using median blur."""
+        import cv2
+        return cv2.medianBlur(img_cv, 3)
+    
+    def _morphological_cleanup(self, img_cv):
+        """Apply morphological operations to clean text edges."""
+        import cv2
+        import numpy as np
+        
+        kernel = np.ones((1, 1), np.uint8)
+        img_cv = cv2.dilate(img_cv, kernel, iterations=1)
+        img_cv = cv2.erode(img_cv, kernel, iterations=1)
+        return img_cv
+    
+    def _preprocess_image(self, img) -> 'Image':
+        """Enhanced preprocessing pipeline with deskew, Otsu, noise removal."""
+        from PIL import ImageFilter, Image, ImageEnhance, ImageOps
+        import cv2
+        import numpy as np
+        
+        # 1. Convert to RGB if needed
         if img.mode == 'RGBA':
             img = img.convert('RGB')
         
-        # Scale up small images
+        # 2. Scale up small images
         if img.width < 1000 or img.height < 1000:
             scale = max(2, 1500 // min(img.width, img.height))
             img = img.resize(
@@ -200,7 +430,7 @@ class SmartOCR:
                 Image.Resampling.LANCZOS
             )
         
-        # Try to detect and fix rotation
+        # 3. Auto-rotation via OSD
         try:
             gray_for_osd = img.convert('L')
             osd = pytesseract.image_to_osd(gray_for_osd, output_type=pytesseract.Output.DICT)
@@ -208,16 +438,33 @@ class SmartOCR:
             if rotate_angle != 0:
                 img = img.rotate(-rotate_angle, expand=True, fillcolor='white')
         except:
-            pass  # OSD may fail on some images
+            pass
         
-        # Convert to grayscale
+        # 4. NEW: Deskew (skew angle correction)
+        try:
+            img = self._deskew_image(img)
+        except:
+            pass
+        
+        # 5. Convert to grayscale and auto-contrast
         gray = img.convert('L')
-        
-        # Auto-contrast for low contrast images
         gray = ImageOps.autocontrast(gray, cutoff=1)
         
-        # Apply UnsharpMask for edge enhancement
-        processed = gray.filter(ImageFilter.UnsharpMask(radius=2, percent=150))
+        # 6. Convert to OpenCV for advanced processing
+        img_cv = np.array(gray)
+        
+        # 7. NEW: Otsu Thresholding
+        binary = self._apply_threshold(img_cv)
+        
+        # 8. NEW: Noise removal
+        denoised = self._remove_noise(binary)
+        
+        # 9. NEW: Morphological cleanup
+        cleaned = self._morphological_cleanup(denoised)
+        
+        # 10. Convert back to PIL and apply UnsharpMask
+        processed = Image.fromarray(cleaned)
+        processed = processed.filter(ImageFilter.UnsharpMask(radius=2, percent=150))
         
         return processed
     
@@ -251,10 +498,44 @@ class SmartOCR:
         return max(0, score)
     
     def _normalize_symbols(self, text: str) -> str:
-        """Normalize arrows and symbols."""
+        """Normalize arrows, symbols, and fix common OCR misreads for Turkish."""
         result = text
+        
+        # Fix arrow patterns
         for pattern, replacement in self.ARROW_PATTERNS:
             result = re.sub(pattern, replacement, result)
+        
+        # Fix common OCR misreads for Turkish
+        # Down arrow often misread as 'v' in Turkish text
+        turkish_fixes = [
+            ('↓e', 've'),      # ve (and)
+            ('↓E', 'VE'),
+            ('↓a', 'va'),      # va- prefix
+            ('a↓', 'av'),      # av- prefix  
+            ('e↓', 'ev'),      # ev (house)
+            ('↓i', 'vi'),
+            ('↓ı', 'vı'),
+            ('↓u', 'vu'),
+            ('↓ü', 'vü'),
+            ('↓o', 'vo'),
+            ('↓ö', 'vö'),
+            ('Ce↓', 'Cev'),    # Cevap
+            ('ha↓a', 'hava'),  # hava
+            ('de↓', 'dev'),    # dev-
+            ('↓ar', 'var'),    # var
+            ('↓er', 'ver'),    # ver
+            ('se↓', 'sev'),    # sev-
+            ('ya↓', 'yav'),    # yav-
+            # General: isolated ↓ between letters likely means v
+            (r'(\w)↓(\w)', r'\1v\2'),
+        ]
+        
+        for pattern, replacement in turkish_fixes:
+            if '\\' in pattern:  # regex pattern
+                result = re.sub(pattern, replacement, result)
+            else:
+                result = result.replace(pattern, replacement)
+        
         return result
     
     def _clean_ocr_output(self, text: str) -> str:
@@ -304,7 +585,7 @@ class SmartOCR:
         # Check for garbage (too many short words across all lines)
         if len(all_words) > 10:
             avg_len = sum(len(re.sub(r'[^\w]', '', w)) for w in all_words) / len(all_words)
-            if avg_len < 2.5:
+            if avg_len < 2.1:  # Lowered from 2.5 for Turkish
                 return ""
         
         result = '\n\n'.join(clean_lines)  # Double newline for markdown paragraphs
@@ -315,16 +596,31 @@ class SmartOCR:
             if alnum_ratio < 0.4:
                 return ""
         
-        # Check for gibberish patterns (reversed text, random chars)
+        # Check for gibberish patterns (charts, graphs, random text)
         if result and len(all_words) > 3:
             # Count unusual character sequences (4+ consonants in a row)
             consonant_runs = re.findall(r'[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ]{4,}', result)
-            if len(consonant_runs) > len(all_words) * 0.2:
+            if len(consonant_runs) > len(all_words) * 0.15:  # Stricter: 0.2 -> 0.15
                 return ""
             
             # Check for too many uppercase in unusual positions
             words_with_mid_caps = sum(1 for w in all_words if re.search(r'[a-z][A-Z]', w))
-            if words_with_mid_caps > len(all_words) * 0.3:
+            if words_with_mid_caps > len(all_words) * 0.25:  # Stricter: 0.3 -> 0.25
+                return ""
+            
+            # NEW: Check for chart/graph gibberish (too many ALL-CAPS short words)
+            short_caps = sum(1 for w in all_words if len(w) <= 3 and w.isupper())
+            if short_caps > len(all_words) * 0.3:
+                return ""
+            
+            # NEW: Check for excessive single/double character words (chart labels)
+            very_short = sum(1 for w in all_words if len(re.sub(r'[^\w]', '', w)) <= 2)
+            if len(all_words) > 15 and very_short > len(all_words) * 0.5:
+                return ""
+            
+            # NEW: Check for repeated random patterns (e.g., "e e e", "a a a")
+            unique_words = set(w.lower() for w in all_words)
+            if len(all_words) > 20 and len(unique_words) < len(all_words) * 0.3:
                 return ""
             
             # Check for common Turkish/English words - if none found, likely garbage
@@ -332,7 +628,9 @@ class SmartOCR:
                 've', 'bir', 'bu', 'için', 'ile', 'da', 'de', 'ne', 'var', 'olan',
                 'the', 'and', 'for', 'is', 'in', 'to', 'of', 'a', 'an', 'it',
                 'gibi', 'daha', 'çok', 'nasıl', 'neden', 'kadar', 'sonra', 'önce',
-                'olarak', 'arasında', 'üzerinde', 'altında', 'hakkında', 'göre'
+                'olarak', 'arasında', 'üzerinde', 'altında', 'hakkında', 'göre',
+                'olarak', 'ise', 'ya', 'veya', 'hem', 'ancak', 'fakat', 'çünkü',
+                'that', 'this', 'with', 'from', 'have', 'are', 'was', 'were', 'be'
             }
             lower_words = [w.lower() for w in all_words if len(w) > 1]
             common_found = sum(1 for w in lower_words if w in common_words)
