@@ -1,5 +1,7 @@
 # User content
 test pdfleri/
+test/
+test_result.txt
 
 # Python
 __pycache__/

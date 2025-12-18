@@ -98,6 +98,51 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
+/* Locked state during processing */
+.locked {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+    position: relative;
+}
+
+/* Stop mode - convert button transforms to stop button (dark purple/navy) */
+.btn-convert.stop-mode {
+    background: linear-gradient(135deg, #4f46e5, #3730a3) !important;
+    box-shadow: 0 4px 20px rgba(79, 70, 229, 0.3);
+}
+
+.btn-convert.stop-mode:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 30px rgba(79, 70, 229, 0.4);
+}
+
+.btn-convert.stop-mode .btn-glow {
+    background: radial-gradient(circle at center, rgba(79, 70, 229, 0.4), transparent);
+}
+
+/* Result file remove button */
+.result-remove-btn {
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-fast);
+    margin-left: auto;
+}
+
+.result-remove-btn:hover {
+    background: #ef4444;
+    color: white;
+}
+
 /* ===== Animated Background ===== */
 .bg-container {
     position: fixed;

@@ -84,10 +84,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dropOutput = document.getElementById('dropOutput');
     const fileInput = document.getElementById('fileInput');
     const convertBtn = document.getElementById('convertBtn');
+    const btnIcon = document.getElementById('btnIcon');
+    const btnText = document.getElementById('btnText');
     const fileListEl = document.getElementById('fileList');
     const globalProgress = document.getElementById('globalProgress');
     const progressFill = document.getElementById('progressFill');
     const progressText = document.getElementById('progressText');
+
+    // Abort controller for stopping processing
+    let abortController = null;
 
     // ===== System Info =====
     try {
@@ -248,8 +253,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (isDone) icon = '✅';
             if (isError) icon = '❌';
 
-            // Show remove button only if not processing and not done
-            const showRemove = !isProcessing && !isDone && !file._processing;
+            // Show remove button if not currently processing
+            const showRemove = !file._processing;
             // Show view button only if done
             const showView = isDone && file._outputPath;
 
@@ -281,6 +286,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (selectedFiles.length === 0) {
                     dropInput.classList.remove('selected');
                     document.getElementById('fileSummary').innerHTML = '';
+                    // Reset all stats when no files left
+                    startTime = null;
+                    document.getElementById('statSpeed').textContent = '0';
+                    document.getElementById('elapsedTime').textContent = '00:00';
                 } else {
                     document.getElementById('fileSummary').innerHTML = `<strong>${selectedFiles.length}</strong> files loaded`;
                 }
@@ -348,6 +357,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // Lock/unlock inputs during processing and toggle button
+    function lockInputs() {
+        dropInput.classList.add('locked');
+        dropOutput.classList.add('locked');
+        // Transform button to stop mode
+        convertBtn.classList.add('stop-mode');
+        btnIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="6" y="6" width="12" height="12" rx="2" />
+        </svg>`;
+        btnText.textContent = 'Durdur';
+        convertBtn.disabled = false;
+    }
+
+    function unlockInputs() {
+        dropInput.classList.remove('locked');
+        dropOutput.classList.remove('locked');
+        // Transform button back to start mode
+        convertBtn.classList.remove('stop-mode');
+        btnIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3" />
+        </svg>`;
+        btnText.textContent = i18n[currentLang].start;
+    }
+
+    // Stop processing function
+    function stopProcessing() {
+        if (abortController) {
+            abortController.abort();
+            isProcessing = false;
+            unlockInputs();
+            stopElapsedTimer();
+            setStatus(i18n[currentLang].ready);
+            updateState();
+            // Mark remaining files as stopped
+            selectedFiles.forEach((file, idx) => {
+                if (!file._done && !file._error) {
+                    file._status = 'Durduruldu';
+                    file._error = true;
+                }
+            });
+            renderQueue();
+        }
+    }
+
     function setStatus(text) {
         document.getElementById('statusText').textContent = text;
         const dot = document.querySelector('.status-dot');
@@ -390,11 +443,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ===== SSE-Based Conversion with Real Page Progress =====
     convertBtn.onclick = async () => {
+        // If in stop mode, stop processing
+        if (convertBtn.classList.contains('stop-mode')) {
+            stopProcessing();
+            return;
+        }
+
         if (!selectedFiles.length || !selectedPath || isProcessing) return;
 
         isProcessing = true;
         startTime = Date.now();
+        abortController = new AbortController();
         updateState();
+        lockInputs();  // Lock inputs during processing
         setStatus(i18n[currentLang].running);
 
         // Start elapsed timer and reset counter
@@ -439,7 +500,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Use SSE streaming endpoint
             const response = await fetch('/api/convert-stream', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                signal: abortController.signal
             });
 
             const reader = response.body.getReader();
@@ -476,6 +538,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         isProcessing = false;
+        abortController = null;
+        unlockInputs();  // Unlock inputs after processing
         stopElapsedTimer();
         setStatus(i18n[currentLang].complete);
         updateState();

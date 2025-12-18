@@ -7,10 +7,10 @@ yaml = YAML()
 
 class OCRConfig(BaseModel):
     enable: str = "auto"  # auto, on, off
-    langs: str = "eng+tur"
+    langs: str = "eng+tur"  # English + Turkish (scoop install tesseract-languages)
     force_for_low_text_ratio: float = 0.15
     broken_text_threshold: int = 4  # Matches for "s p a c e d" text to trigger OCR
-    tesseract_config: str = "--psm 6" # Page Segmentation Mode (6=Block, best for lists)
+    tesseract_config: str = "--psm 6"  # Page Segmentation Mode (6=Block, best for tables/mixed content)
 
 class CleaningConfig(BaseModel):
     repeated_text_ratio: float = 0.6

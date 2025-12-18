@@ -10,6 +10,8 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import traceback
+import warnings
+import logging
 
 from docuforge.src.core.config import AppConfig
 from docuforge.src.ingestion.loader import PDFLoader, PDFChunk
@@ -21,6 +23,13 @@ import sys
 import os
 import tempfile
 import atexit
+
+# Suppress PDF parser warnings (pdfminer, PyMuPDF, pdfplumber)
+warnings.filterwarnings('ignore', message='.*FontBBox.*')
+warnings.filterwarnings('ignore', message='.*non-stroke.*')
+warnings.filterwarnings('ignore', message='.*invalid float.*')
+logging.getLogger('pdfminer').setLevel(logging.ERROR)
+logging.getLogger('fitz').setLevel(logging.ERROR)
 
 # Configure Logger: clean output for user
 logger.remove()
@@ -247,8 +256,10 @@ def convert(
             transient=True  # Clear bars after completion
         ) as progress:
             
-            main_task = progress.add_task(f"[green]Total Batch", total=total_pdfs)
-            file_task = progress.add_task(f"Waiting...", total=100, visible=False)  # Reuse this task
+            main_task = progress.add_task(f"[green]Total Batch [1/{total_pdfs}]", total=total_pdfs)
+            # Show file_task immediately with first file name
+            first_file_name = pdfs[0].name if pdfs else "Preparing..."
+            file_task = progress.add_task(f"[cyan]Preparing: {first_file_name}", total=100, visible=True)
         
             for idx, pdf_path in enumerate(pdfs, 1):
                 file_start_time = time.time()
@@ -273,10 +284,13 @@ def convert(
                 validated_watermarks = analyzer.analyze()
                 
                 # Prepare chunks
+                # Reset file task timer for new file
+                progress.reset(file_task)
                 progress.update(file_task, description=f"[cyan]Reading: {pdf_path.name}", visible=True, total=None)  # Indeterminate while reading
                 chunks = list(loader.stream_chunks(pdf_path))
                 total_chunks = len(chunks)
                 
+                progress.reset(file_task)  # Reset again after reading
                 progress.update(file_task, description=f"[cyan]Processing: {pdf_path.name}", total=total_chunks, completed=0)
                 
                 doc_full_md = []

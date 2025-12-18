@@ -25,11 +25,32 @@ class PipelineController:
         """
         ensure_windows_temp_compatibility()
         
-        # Suppress noisy warnings
+        # Suppress noisy warnings from PDF parsers
         warnings.filterwarnings('ignore', message='.*FontBBox.*')
         warnings.filterwarnings('ignore', message='.*Could get FontBBox.*')
-        warnings.filterwarnings('ignore', message='.*pkg_resources.*')  # Suppress deprecation warning in workers
-        logging.getLogger('pdfminer').setLevel(logging.ERROR)
+        warnings.filterwarnings('ignore', message='.*non-stroke.*')
+        warnings.filterwarnings('ignore', message='.*invalid float.*')
+        warnings.filterwarnings('ignore', message='.*pkg_resources.*')
+        
+        # Suppress pdfminer and fitz logging
+        logging.getLogger('pdfminer').setLevel(logging.CRITICAL)
+        logging.getLogger('fitz').setLevel(logging.CRITICAL)
+        
+        # Redirect pdfminer stderr output (it uses print directly)
+        import sys
+        import io
+        
+        class StderrFilter:
+            """Filter stderr to suppress pdfminer noise."""
+            def __init__(self, original):
+                self.original = original
+            def write(self, msg):
+                if 'Cannot set gray' not in msg and 'non-stroke' not in msg:
+                    self.original.write(msg)
+            def flush(self):
+                self.original.flush()
+        
+        sys.stderr = StderrFilter(sys.stderr)
 
     @staticmethod
     def process_chunk(chunk: PDFChunk, config: AppConfig, doc_output_dir: Path, validated_watermarks: Optional[set] = None) -> str:

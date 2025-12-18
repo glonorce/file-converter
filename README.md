@@ -61,6 +61,10 @@ iwr -useb get.scoop.sh | iex
 # Gerekli araçlar:
 scoop bucket add extras
 scoop install poppler tesseract ghostscript
+
+# Tesseract dil dosyaları (Best modeller - daha yüksek doğruluk):
+Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_best/raw/main/eng.traineddata" -OutFile "$env:USERPROFILE\scoop\persist\tesseract\tessdata\eng.traineddata"
+Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_best/raw/main/tur.traineddata" -OutFile "$env:USERPROFILE\scoop\persist\tesseract\tessdata\tur.traineddata"
 ```
 
 > **Not:** Windows için optimize edilmiştir. Mac veya Linux kullanıcıları benzer araçları (Poppler, Tesseract) manuel kurarak (`brew install` veya `apt-get install`) kullanabilir.
@@ -178,6 +182,10 @@ iwr -useb get.scoop.sh | iex
 # Install Dependencies:
 scoop bucket add extras
 scoop install poppler tesseract ghostscript
+
+# Tesseract language files (Best models - higher accuracy):
+Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_best/raw/main/eng.traineddata" -OutFile "$env:USERPROFILE\scoop\persist\tesseract\tessdata\eng.traineddata"
+Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_best/raw/main/tur.traineddata" -OutFile "$env:USERPROFILE\scoop\persist\tesseract\tessdata\tur.traineddata"
 ```
 
 > **Note:** Optimized for Windows. Mac or Linux users can run the tool by manually installing dependencies (Poppler, Tesseract) using `brew` or `apt-get`.

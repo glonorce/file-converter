@@ -135,6 +135,25 @@ class StructureExtractor:
         # Sort by X
         chars = sorted(chars, key=lambda c: c['x0'])
         
+        # Calculate gaps first to determine dynamic threshold
+        gaps = []
+        for i in range(1, len(chars)):
+            gap = chars[i]['x0'] - chars[i-1]['x1']
+            size = chars[i].get('size', 10)
+            if gap > 0:  # Only positive gaps
+                gaps.append(gap / size)
+        
+        # Dynamic threshold: use the 75th percentile of gaps
+        # Words are separated by larger-than-average gaps
+        if gaps:
+            sorted_gaps = sorted(gaps)
+            idx = int(len(sorted_gaps) * 0.75)
+            dynamic_threshold = sorted_gaps[idx] * 0.85  # Slightly below 75th percentile
+            # Fallback bounds
+            dynamic_threshold = max(0.15, min(0.35, dynamic_threshold))
+        else:
+            dynamic_threshold = 0.25
+        
         for i, char in enumerate(chars):
             text = self._normalize_text(char.get('text', ''))
             size = char.get('size', 10)
@@ -146,12 +165,8 @@ class StructureExtractor:
             prev_char = chars[i-1]
             gap = char['x0'] - prev_char['x1']
             
-            # Threshold: If gap is small, it's the same word.
-            # If gap is large, insert space.
-            # 0.35 was too aggressive (caused "Güç,VizyonveSistem")
-            # 0.10 was too weak (caused "G ü ç")
-            # 0.20 is the sweet spot for Turkish kerning.
-            threshold = size * 0.20 
+            # Use dynamic threshold adjusted by font size
+            threshold = size * dynamic_threshold
             
             if gap > threshold:
                 words.append("".join(current_word))

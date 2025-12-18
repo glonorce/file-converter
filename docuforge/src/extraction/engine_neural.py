@@ -1042,7 +1042,7 @@ class NeuralSpatialEngine:
                 if self.chart_guard.is_chart(chart_region, layout):
                     chart_type = self.chart_guard.detect_chart_type(chart_region, layout)
                     charts.append(self.chart_guard.mark_chart_region(chart_region, chart_type))
-                    logger.info(f"Page {page_num}: Detected as {chart_type} chart")
+                    logger.debug(f"Page {page_num}: Detected as {chart_type} chart")
                     # Don't try to extract charts as tables
                     return tables_md, charts, []
             
