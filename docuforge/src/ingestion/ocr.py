@@ -176,6 +176,65 @@ class SmartOCR:
             logger.debug(f"Downsampled image from {width}x{height} to {new_width}x{new_height}")
         
         return image
+    
+    def _get_orientation(self, image) -> tuple:
+        """Detect page orientation using Tesseract OSD (OCRmyPDF technique).
+        
+        Returns:
+            tuple: (rotation_angle, confidence) where angle is 0, 90, 180, or 270
+        """
+        import tempfile
+        import os
+        
+        try:
+            # Save image to temp file for Tesseract
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                temp_path = tmp.name
+                image.save(temp_path)
+            
+            # Use PSM 0 for orientation and script detection only
+            output = pytesseract.image_to_osd(
+                temp_path, 
+                config='--psm 0',
+                output_type=pytesseract.Output.DICT
+            )
+            
+            # Get rotation angle and confidence
+            rotate_angle = output.get('rotate', 0)
+            confidence = output.get('orientation_conf', 0)
+            
+            # Clean up temp file
+            os.unlink(temp_path)
+            
+            logger.debug(f"Orientation detected: {rotate_angle}° (confidence: {confidence})")
+            return (rotate_angle, confidence)
+            
+        except Exception as e:
+            logger.debug(f"Orientation detection failed: {e}")
+            if 'temp_path' in locals():
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+            return (0, 0)
+    
+    def _auto_rotate_image(self, image):
+        """Auto-rotate image based on detected orientation (OCRmyPDF technique).
+        
+        Only rotates if orientation confidence is high enough.
+        """
+        from PIL import Image
+        
+        rotation, confidence = self._get_orientation(image)
+        
+        # Only rotate if confident enough (OCRmyPDF uses 5+)
+        if confidence >= 5 and rotation != 0:
+            # PIL rotate is counter-clockwise, Tesseract reports clockwise
+            rotated = image.rotate(-rotation, expand=True, fillcolor='white')
+            logger.debug(f"Auto-rotated image by {rotation}°")
+            return rotated
+        
+        return image
 
     def process_page(self, pdf_path: Path, page_num: int, original_text: str) -> str:
         """
@@ -279,24 +338,40 @@ class SmartOCR:
             # OCRmyPDF Phase 3A: Downsample large images to fit Tesseract limits
             ocr_image = self._downsample_large_image(ocr_image)
             
+            # OCRmyPDF Phase 3B: Auto-rotate based on detected orientation
+            ocr_image = self._auto_rotate_image(ocr_image)
+            
             # Strategy: Try simple grayscale first (Tesseract Sauvola works best on raw grayscale)
             simple_processed = self._simple_preprocess(ocr_image)
             best_text, best_score = self._ocr_with_modes(simple_processed)
             
-            # If poor result, try advanced preprocessing
+            # Phase 3B: Confidence-based retry with progressive preprocessing
             if best_score < 40:
+                # Try advanced preprocessing
                 processed = self._preprocess_image(ocr_image)
                 adv_text, adv_score = self._ocr_with_modes(processed)
                 if adv_score > best_score:
                     best_text = adv_text
                     best_score = adv_score
             
+            # Phase 3B: If still poor, try with rotation variants
+            if best_score < 30:
+                for rotation in [90, 180, 270]:
+                    rotated = ocr_image.rotate(-rotation, expand=True, fillcolor='white')
+                    rot_processed = self._simple_preprocess(rotated)
+                    rot_text, rot_score = self._ocr_with_modes(rot_processed)
+                    if rot_score > best_score:
+                        best_text = rot_text
+                        best_score = rot_score
+                        logger.debug(f"Better result with {rotation}° rotation")
+                        break  # Found better result, stop trying
+            
             # Post-process
             result = self._clean_ocr_output(best_text)
             result = self._normalize_symbols(result)
             
             if result:
-                logger.debug(f"Page {page_num}: OCR extracted {len(result)} chars")
+                logger.debug(f"Page {page_num}: OCR extracted {len(result)} chars (score={best_score})")
             
             return result
             
