@@ -177,6 +177,84 @@ class SmartOCR:
         
         return image
     
+    def _detect_layout(self, image) -> dict:
+        """Detect page layout: columns, tables, sparse text (Phase 3B).
+        
+        Uses Tesseract's image_to_data with PSM 0 to analyze page structure.
+        Returns layout hints for optimal OCR strategy selection.
+        """
+        import tempfile
+        import os
+        
+        layout = {
+            'columns': 1,
+            'has_table': False,
+            'is_sparse': False,
+            'text_blocks': 0,
+            'recommended_psm': 6  # Default: uniform text block
+        }
+        
+        try:
+            # Save image to temp file
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                temp_path = tmp.name
+                image.save(temp_path)
+            
+            # Get detailed OCR data with PSM 1 (Auto page segmentation with OSD)
+            data = pytesseract.image_to_data(
+                temp_path,
+                lang=self._langs,
+                config='--psm 1 --oem 1',
+                output_type=pytesseract.Output.DICT
+            )
+            
+            os.unlink(temp_path)
+            
+            # Analyze block structure
+            blocks = set(data.get('block_num', []))
+            layout['text_blocks'] = len(blocks)
+            
+            # Detect columns by analyzing X positions of blocks
+            if 'left' in data and len(data['left']) > 10:
+                lefts = [x for x in data['left'] if x > 0]
+                if lefts:
+                    # If blocks start at very different X positions, likely multi-column
+                    x_variance = max(lefts) - min(lefts)
+                    img_width = image.size[0] if hasattr(image, 'size') else 1000
+                    if x_variance > img_width * 0.4:
+                        layout['columns'] = 2
+                        layout['recommended_psm'] = 3  # Fully auto for multi-column
+            
+            # Detect sparse text
+            if 'text' in data:
+                non_empty = [t for t in data['text'] if t and t.strip()]
+                if len(non_empty) < 20:
+                    layout['is_sparse'] = True
+                    layout['recommended_psm'] = 11  # Sparse text
+            
+            # Table detection heuristic: many aligned blocks
+            if layout['text_blocks'] > 15:
+                layout['has_table'] = True
+                layout['recommended_psm'] = 6  # Block mode works best for tables
+            
+            logger.debug(f"Layout detected: {layout}")
+            return layout
+            
+        except Exception as e:
+            logger.debug(f"Layout detection failed: {e}")
+            return layout
+    
+    def _get_optimal_psm(self, image) -> int:
+        """Get optimal PSM mode based on page layout (Phase 3B).
+        
+        PSM modes:
+        - 3: Fully automatic page segmentation (multi-column)
+        - 6: Assume uniform block of text (default, tables)
+        - 11: Sparse text - find as much text as possible
+        """
+        layout = self._detect_layout(image)
+        return layout['recommended_psm']
+    
     def _get_orientation(self, image) -> tuple:
         """Detect page orientation using Tesseract OSD (OCRmyPDF technique).
         
