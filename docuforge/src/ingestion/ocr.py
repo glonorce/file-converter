@@ -313,6 +313,126 @@ class SmartOCR:
             return rotated
         
         return image
+    
+    def generate_searchable_pdf(self, image, output_path: Path) -> bool:
+        """Generate a searchable PDF from an image (Phase 3C Strategy A).
+        
+        Uses Tesseract's internal PDF generator for simple, fast output.
+        The generated PDF contains both the image and an invisible text layer.
+        
+        Args:
+            image: PIL Image or path to image file
+            output_path: Where to save the searchable PDF
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        from PIL import Image
+        import tempfile
+        import os
+        
+        try:
+            # Handle different input types
+            if isinstance(image, (str, Path)):
+                image = Image.open(image)
+            
+            # Preprocess for better OCR
+            image = self._downsample_large_image(image)
+            image = self._auto_rotate_image(image)
+            processed = self._simple_preprocess(image)
+            
+            # Build Tesseract config with all our optimizations
+            config = f'--oem 1 --psm 6'
+            if self._user_words_path and self._user_words_path.exists():
+                config += f' --user-words {self._user_words_path}'
+            if self._user_patterns_path and self._user_patterns_path.exists():
+                config += f' --user-patterns {self._user_patterns_path}'
+            
+            # Generate searchable PDF using Tesseract's internal renderer
+            pdf_bytes = pytesseract.image_to_pdf_or_hocr(
+                processed,
+                lang=self._langs,
+                extension='pdf',
+                config=config
+            )
+            
+            # Write to output file
+            with open(output_path, 'wb') as f:
+                f.write(pdf_bytes)
+            
+            logger.debug(f"Generated searchable PDF: {output_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Searchable PDF generation failed: {e}")
+            return False
+    
+    def process_pdf_to_searchable(self, input_pdf: Path, output_pdf: Path) -> bool:
+        """Convert a PDF to a searchable PDF with OCR text layer (Phase 3C).
+        
+        Each page is OCR'd and the text layer is embedded.
+        
+        Args:
+            input_pdf: Input PDF file
+            output_pdf: Output searchable PDF
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        import pikepdf
+        import tempfile
+        import os
+        
+        try:
+            # Convert each page to image and generate searchable PDF
+            images = convert_from_path(str(input_pdf), dpi=300)
+            
+            if not images:
+                logger.error("No pages found in PDF")
+                return False
+            
+            # Generate searchable PDF for each page
+            page_pdfs = []
+            temp_dir = tempfile.mkdtemp()
+            
+            try:
+                for i, img in enumerate(images):
+                    page_pdf = Path(temp_dir) / f"page_{i}.pdf"
+                    if self.generate_searchable_pdf(img, page_pdf):
+                        page_pdfs.append(page_pdf)
+                    else:
+                        logger.warning(f"Page {i+1} OCR failed, skipping")
+                
+                if not page_pdfs:
+                    logger.error("No pages were successfully OCR'd")
+                    return False
+                
+                # Merge all page PDFs into one
+                with pikepdf.Pdf.new() as output:
+                    for page_pdf in page_pdfs:
+                        with pikepdf.Pdf.open(page_pdf) as src:
+                            output.pages.extend(src.pages)
+                    
+                    output.save(output_pdf)
+                
+                logger.info(f"Created searchable PDF with {len(page_pdfs)} pages: {output_pdf}")
+                return True
+                
+            finally:
+                # Cleanup temp files
+                for f in page_pdfs:
+                    try:
+                        os.unlink(f)
+                    except:
+                        pass
+                try:
+                    os.rmdir(temp_dir)
+                except:
+                    pass
+            
+        except Exception as e:
+            logger.error(f"PDF to searchable conversion failed: {e}")
+            return False
 
     def process_page(self, pdf_path: Path, page_num: int, original_text: str) -> str:
         """
