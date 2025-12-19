@@ -1,0 +1,29 @@
+# Tesseract User Patterns for Turkish Documents
+# These regex patterns help Tesseract recognize common Turkish text patterns
+
+# Phone numbers
+\d{3}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}
+
+# Percentages (Turkish uses comma as decimal separator)
+%\d+[\,\.]?\d*
+\d+[\,\.]?\d*%
+
+# Currency amounts
+\d+[\,\.]\d{2}\s*(TL|₺|USD|EUR)
+(TL|₺|USD|EUR)\s*\d+[\,\.]\d{2}
+
+# Dates (DD.MM.YYYY, DD/MM/YYYY)
+\d{2}[\.\/]\d{2}[\.\/]\d{4}
+\d{4}[\.\/]\d{2}[\.\/]\d{2}
+
+# Years
+(19|20)\d{2}
+
+# Common Turkish economic terms patterns
+GSY[Iİ]H
+GSMH
+KDV
+T[Üü]FE
+[Üü]FE
+SGK
+TCMB

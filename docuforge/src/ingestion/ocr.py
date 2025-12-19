@@ -104,12 +104,78 @@ class SmartOCR:
         import os
         module_dir = Path(__file__).parent.parent.parent
         self._user_words_path = module_dir / "data" / "turkish_economics.txt"
+        self._user_patterns_path = module_dir / "data" / "turkish_patterns.txt"
         
         if self._user_words_path.exists():
             logger.debug(f"Using user-words: {self._user_words_path}")
         else:
             self._user_words_path = None
             logger.debug("No user-words file found")
+        
+        if self._user_patterns_path.exists():
+            logger.debug(f"Using user-patterns: {self._user_patterns_path}")
+        else:
+            self._user_patterns_path = None
+        
+        # OCRmyPDF technique: Limit Tesseract threads to avoid CPU contention
+        # When running parallel OCR, limit each Tesseract instance to fewer threads
+        os.environ.setdefault('OMP_THREAD_LIMIT', '3')
+        logger.debug(f"OMP_THREAD_LIMIT set to {os.environ.get('OMP_THREAD_LIMIT')}")
+    
+    def _downsample_large_image(self, image):
+        """Downsample large images to fit Tesseract limits (OCRmyPDF technique).
+        
+        Tesseract has limits:
+        - Max 32767 pixels in either dimension
+        - Max 2^31 bytes total
+        
+        This prevents Tesseract errors on large scanned documents.
+        """
+        from PIL import Image
+        from math import floor, sqrt
+        
+        max_size = 32767
+        max_bytes = (2**31) - 1
+        
+        width, height = image.size
+        
+        # Check dimension limit
+        if width <= max_size and height <= max_size:
+            # Check byte limit (estimate 4 bytes per pixel for RGB)
+            bpp = 4 if image.mode in ('RGB', 'RGBA') else 1
+            if width * height * bpp <= max_bytes:
+                return image  # No downsampling needed
+        
+        # Calculate scale factor
+        scale_factor = 1.0
+        if width > max_size or height > max_size:
+            scale_factor = min(scale_factor, max_size / max(width, height))
+        
+        bpp = 4 if image.mode in ('RGB', 'RGBA') else 1
+        if width * height * bpp > max_bytes:
+            bytes_scale = sqrt(max_bytes / (width * height * bpp))
+            scale_factor = min(scale_factor, bytes_scale)
+        
+        if scale_factor < 1.0:
+            new_width = floor(width * scale_factor)
+            new_height = floor(height * scale_factor)
+            
+            # Preserve DPI if available
+            original_dpi = image.info.get('dpi', (300, 300))
+            
+            image = image.resize(
+                (new_width, new_height),
+                resample=Image.Resampling.BICUBIC
+            )
+            
+            # Adjust DPI to match new size
+            image.info['dpi'] = (
+                round(original_dpi[0] * scale_factor),
+                round(original_dpi[1] * scale_factor)
+            )
+            logger.debug(f"Downsampled image from {width}x{height} to {new_width}x{new_height}")
+        
+        return image
 
     def process_page(self, pdf_path: Path, page_num: int, original_text: str) -> str:
         """
@@ -210,6 +276,9 @@ class SmartOCR:
                 if ocr_image is None:
                     return ""
             
+            # OCRmyPDF Phase 3A: Downsample large images to fit Tesseract limits
+            ocr_image = self._downsample_large_image(ocr_image)
+            
             # Strategy: Try simple grayscale first (Tesseract Sauvola works best on raw grayscale)
             simple_processed = self._simple_preprocess(ocr_image)
             best_text, best_score = self._ocr_with_modes(simple_processed)
@@ -246,21 +315,23 @@ class SmartOCR:
         best_text = ""
         best_score = 0
         
-        # Build user-words config if available
-        user_words_config = ""
+        # Build user-words and user-patterns config if available (OCRmyPDF technique)
+        extra_config = ""
         if self._user_words_path and self._user_words_path.exists():
-            user_words_config = f" --user-words {self._user_words_path}"
+            extra_config += f" --user-words {self._user_words_path}"
+        if self._user_patterns_path and self._user_patterns_path.exists():
+            extra_config += f" --user-patterns {self._user_patterns_path}"
         
         # Multi-pass strategies (ordered by speed, most common first)
         strategies = [
             # Pass 1: Default (fast, good for clean text)
-            f"--oem 1 --psm 6{user_words_config}",
+            f"--oem 1 --psm 6{extra_config}",
             # Pass 2: Sauvola thresholding (best for colored backgrounds)
-            f"--oem 1 --psm 6 -c thresholding_method=2 -c thresholding_kfactor=0.3{user_words_config}",
+            f"--oem 1 --psm 6 -c thresholding_method=2 -c thresholding_kfactor=0.3{extra_config}",
             # Pass 3: Aggressive Sauvola (for difficult images)
-            f"--oem 1 --psm 6 -c thresholding_method=2 -c thresholding_kfactor=0.2{user_words_config}",
+            f"--oem 1 --psm 6 -c thresholding_method=2 -c thresholding_kfactor=0.2{extra_config}",
             # Pass 4: Sparse text mode (for scattered text)
-            f"--oem 1 --psm 11 -c thresholding_method=2 -c thresholding_kfactor=0.3{user_words_config}",
+            f"--oem 1 --psm 11 -c thresholding_method=2 -c thresholding_kfactor=0.3{extra_config}",
         ]
         
         for config in strategies:
