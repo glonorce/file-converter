@@ -62,7 +62,7 @@ class StructureExtractor:
         reconstructed_lines = []
         current_line_chars = []
         current_y = None
-        y_tolerance = 3
+        y_tolerance = 5  # Increased from 3 to help separate overlay watermarks
         
         # dynamic gap threshold logic
         def get_gap_threshold(font_size):
@@ -203,7 +203,9 @@ class StructureExtractor:
         if not line_sizes: return ""
         
         body_size = Counter(line_sizes).most_common(1)[0][0]
-        header_threshold = body_size * 1.2
+        header_threshold = body_size * 1.3  # Increased from 1.2 to reduce false positives
+        min_size_diff = 2  # Minimum 2pt difference to be considered a heading
+        max_heading_length = 150  # Headings typically aren't this long
         
         md_lines = []
         for line in lines:
@@ -213,7 +215,14 @@ class StructureExtractor:
             # Apply Healer
             text = self._healer.heal_document(text)
             
-            if max_size >= header_threshold:
+            # Heading detection with extra conditions to reduce false positives
+            is_heading = (
+                max_size >= header_threshold and
+                max_size - body_size >= min_size_diff and  # Must be at least 2pt larger
+                len(text) < max_heading_length  # Long lines aren't headings
+            )
+            
+            if is_heading:
                  # Determine H1 vs H2 vs H3
                 if max_size > body_size * 2:
                     prefix = "# "

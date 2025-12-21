@@ -382,26 +382,44 @@ class SmartOCR:
         import pikepdf
         import tempfile
         import os
+        import fitz  # PyMuPDF for page count
         
         try:
-            # Convert each page to image and generate searchable PDF
-            images = convert_from_path(str(input_pdf), dpi=300)
+            # Get page count without loading images (memory efficient)
+            with fitz.open(str(input_pdf)) as doc:
+                total_pages = len(doc)
             
-            if not images:
+            if total_pages == 0:
                 logger.error("No pages found in PDF")
                 return False
             
-            # Generate searchable PDF for each page
+            logger.info(f"Processing {total_pages} pages (streaming mode)")
+            
+            # Generate searchable PDF for each page - ONE AT A TIME (memory efficient)
             page_pdfs = []
             temp_dir = tempfile.mkdtemp()
             
             try:
-                for i, img in enumerate(images):
-                    page_pdf = Path(temp_dir) / f"page_{i}.pdf"
-                    if self.generate_searchable_pdf(img, page_pdf):
-                        page_pdfs.append(page_pdf)
-                    else:
-                        logger.warning(f"Page {i+1} OCR failed, skipping")
+                for page_num in range(1, total_pages + 1):
+                    # Load only ONE page at a time - prevents 4GB RAM usage
+                    images = convert_from_path(
+                        str(input_pdf), 
+                        dpi=300,
+                        first_page=page_num,
+                        last_page=page_num
+                    )
+                    
+                    if images:
+                        img = images[0]
+                        page_pdf = Path(temp_dir) / f"page_{page_num}.pdf"
+                        if self.generate_searchable_pdf(img, page_pdf):
+                            page_pdfs.append(page_pdf)
+                        else:
+                            logger.warning(f"Page {page_num} OCR failed, skipping")
+                        
+                        # Explicitly release memory
+                        del img
+                        del images
                 
                 if not page_pdfs:
                     logger.error("No pages were successfully OCR'd")

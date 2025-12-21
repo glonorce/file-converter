@@ -766,22 +766,32 @@ class StructureParser:
         return filtered
     
     def _prune_ghost_columns(self, matrix: List[List[str]], 
-                             min_fill_ratio: float = 0.05) -> List[List[str]]:
-        """Remove columns that are mostly empty."""
+                             min_fill_ratio: float = 0.15) -> List[List[str]]:
+        """Remove columns that are mostly empty.
+        
+        Increased min_fill_ratio from 0.05 to 0.15 and removed num_cols < 3 exception
+        to properly handle single-column index tables that were showing as 2-column.
+        """
         if not matrix:
             return matrix
         
         num_cols = len(matrix[0])
         num_rows = len(matrix)
         
+        # Always check for ghost columns, even in 2-column tables
         valid_cols = []
         for col_idx in range(num_cols):
             filled = sum(
                 1 for row in matrix 
                 if col_idx < len(row) and row[col_idx].strip()
             )
-            if filled / num_rows > min_fill_ratio or num_cols < 3:
+            # Column must have at least 15% fill rate to be kept
+            if filled / num_rows >= min_fill_ratio:
                 valid_cols.append(col_idx)
+        
+        # Ensure at least one column remains
+        if not valid_cols and num_cols > 0:
+            valid_cols = [0]
         
         return [
             [row[i] for i in valid_cols if i < len(row)]
