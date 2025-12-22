@@ -62,7 +62,7 @@ class StructureExtractor:
         reconstructed_lines = []
         current_line_chars = []
         current_y = None
-        y_tolerance = 5  # Increased from 3 to help separate overlay watermarks
+        y_tolerance = 7  # Increased from 5 to help separate overlay watermarks
         
         # dynamic gap threshold logic
         def get_gap_threshold(font_size):

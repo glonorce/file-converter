@@ -23,6 +23,90 @@ from docuforge.src.ingestion.loader import PDFLoader
 # NEW: Import Centralized Controller
 from docuforge.src.core.controller import PipelineController
 
+# STARTUP: Clean up orphaned temp files from previous runs
+def _startup_cleanup():
+    """Clean orphaned temp files from previous/crashed runs."""
+    import glob
+    from docuforge.src.core.utils import SafeFileManager
+    
+    # Clean Public/DocuForge/Temp (chunk PDFs + PNG files from Ghostscript)
+    SafeFileManager.cleanup_global_temp()
+    
+    # Also clean any orphaned files in local temp (legacy cleanup)
+    temp_dir = tempfile.gettempdir()
+    for f in glob.glob(os.path.join(temp_dir, "docuforge_*.pdf")):
+        try:
+            os.unlink(f)
+        except Exception:
+            pass
+
+# EXIT: Clean up all temp files when application closes
+def _exit_cleanup():
+    """Clean all temp files when application closes."""
+    import time
+    import shutil
+    
+    temp_dir = Path("C:/Users/Public/DocuForge/Temp")
+    
+    def clean_dir():
+        if temp_dir.exists():
+            try:
+                shutil.rmtree(temp_dir)
+                temp_dir.mkdir(parents=True, exist_ok=True)
+            except:
+                for f in temp_dir.iterdir():
+                    try:
+                        f.unlink()
+                    except:
+                        pass
+    
+    # First cleanup
+    clean_dir()
+    # Wait for late file writes
+    time.sleep(2)
+    # Second cleanup (catches files written during delay)
+    clean_dir()
+
+import atexit
+atexit.register(_exit_cleanup)
+
+# Background cleanup thread - runs every 2 seconds
+_cleanup_running = True
+def _background_cleanup():
+    """Background thread that cleans PNG temp files every 2 seconds.
+    
+    NOTE: Only cleans PNG files (from Ghostscript/pdf2image).
+    PDF chunks (docuforge_*.pdf) are NOT cleaned here - they're cleaned
+    after each chunk is processed by the worker.
+    """
+    import time
+    from pathlib import Path
+    
+    temp_dir = Path("C:/Users/Public/DocuForge/Temp")
+    
+    while _cleanup_running:
+        try:
+            if temp_dir.exists():
+                now = time.time()
+                for f in temp_dir.iterdir():
+                    try:
+                        # Only clean PNG files (Ghostscript output)
+                        # Do NOT clean PDF chunks - workers need them
+                        if f.suffix.lower() == '.png' and now - f.stat().st_mtime > 10:
+                            f.unlink()
+                    except:
+                        pass
+        except:
+            pass
+        time.sleep(2)
+
+# Start cleanup thread
+import threading
+_cleanup_thread = threading.Thread(target=_background_cleanup, daemon=True)
+_cleanup_thread.start()
+
+_startup_cleanup()
+
 app = FastAPI(title="DocuForge API", version="2.1.0")
 
 # SEC-P0-001: Restricted CORS to localhost only
@@ -35,6 +119,80 @@ app.add_middleware(
 )
 
 static_dir = Path(__file__).parent / "web"
+
+# --- Cancellation Support ---
+_cancel_requested = False
+_active_executor = None  # Global reference to current executor
+
+@app.post("/api/cancel")
+def cancel_processing():
+    """Cancel current processing - IMMEDIATELY kills ALL worker processes."""
+    global _cancel_requested, _active_executor
+    _cancel_requested = True
+    
+    killed_count = 0
+    
+    # Suppress stderr to prevent terminal pollution from killed processes
+    import sys
+    import io
+    old_stderr = sys.stderr
+    sys.stderr = io.StringIO()
+    
+    try:
+        # Method 1: Try executor._processes
+        if _active_executor is not None:
+            try:
+                for pid, proc in list(_active_executor._processes.items()):
+                    try:
+                        proc.kill()
+                        killed_count += 1
+                    except:
+                        pass
+                _active_executor.shutdown(wait=False, cancel_futures=True)
+                _active_executor = None
+            except:
+                pass
+        
+        # Method 2: Use psutil to kill ALL child processes (more reliable on Windows)
+        try:
+            import psutil
+            current_process = psutil.Process(os.getpid())
+            children = current_process.children(recursive=True)
+            for child in children:
+                try:
+                    child.kill()
+                    killed_count += 1
+                except:
+                    pass
+        except ImportError:
+            pass  # psutil not installed
+        except:
+            pass
+    finally:
+        # Restore stderr
+        sys.stderr = old_stderr
+    
+    # Background temp cleanup - retry for 30 seconds (processes need time to release files)
+    def cleanup_temp():
+        import time
+        temp_dir = Path("C:/Users/Public/DocuForge/Temp")
+        for attempt in range(30):  # Try for 30 seconds
+            if temp_dir.exists():
+                remaining = list(temp_dir.iterdir())
+                for f in remaining:
+                    try:
+                        f.unlink()
+                    except:
+                        pass
+                # Check if clean
+                if not list(temp_dir.iterdir()):
+                    break  # All cleaned, stop early
+            time.sleep(1)
+    
+    cleanup_thread = threading.Thread(target=cleanup_temp, daemon=True)
+    cleanup_thread.start()
+    
+    return {"status": "cancelled", "killed": killed_count}
 
 # --- API Routes ---
 
@@ -317,72 +475,166 @@ def process_single_pdf_parallel(
     input_path: Path, 
     doc_output_dir: Path, 
     config: AppConfig, 
-    workers: int,
+    workers: int,  # Kept for API compatibility but not used
     progress_callback=None
 ) -> str:
     """
-    Process a single PDF using PipelineController (DRY).
+    Process a single PDF page-by-page WITHOUT creating temp files.
+    
+    Chunking removed because it created temp PDFs that weren't being deleted.
+    Now processes directly from original PDF - no temp files, no memory bloat.
     """
-    # Watermark Analysis - Pre-scan to find true watermarks (>60% of pages)
+    import pdfplumber
+    import gc
+    
+    # Import processing components
+    from docuforge.src.cleaning.zones import ZoneCleaner
+    from docuforge.src.cleaning.artifacts import TextCleaner
+    from docuforge.src.extraction.tables import TableExtractor
+    from docuforge.src.extraction.structure import StructureExtractor
+    from docuforge.src.ingestion.ocr import SmartOCR
+    from docuforge.src.extraction.engine_neural import NeuralSpatialEngine
+    from docuforge.src.extraction.images import ImageExtractor
+    from docuforge.src.extraction.visuals import VisualExtractor
+    
+    # Watermark Analysis - Pre-scan
     from docuforge.src.cleaning.watermark_analyzer import WatermarkAnalyzer
     analyzer = WatermarkAnalyzer(input_path)
     validated_watermarks = analyzer.analyze()
     
-    loader = PDFLoader(chunk_size=10)
-    chunks = list(loader.stream_chunks(input_path))
+    # Initialize processors
+    zone_cleaner = ZoneCleaner(config.cleaning)
+    text_cleaner = TextCleaner(config.cleaning, validated_watermarks=validated_watermarks)
+    table_extractor = TableExtractor(config.extraction)
+    structure_extractor = StructureExtractor()
+    smart_ocr = SmartOCR(config.ocr)
+    neural_engine = NeuralSpatialEngine(config.extraction)
+    image_extractor = ImageExtractor(config.extraction, output_dir=doc_output_dir)
+    visual_extractor = VisualExtractor(config.extraction, output_dir=doc_output_dir)
     
-    if progress_callback:
-        total_pages = sum(chunk.end_page - chunk.start_page + 1 for chunk in chunks)
-        progress_callback('start', 0, total_pages)
+    all_md_content = []
     
-    results = []
-    pages_done = 0
-    
-    with ProcessPoolExecutor(max_workers=workers) as executor:
-        # Use PipelineController.process_chunk with validated_watermarks
-        futures = {
-            executor.submit(PipelineController.process_chunk, chunk, config, doc_output_dir, validated_watermarks): chunk
-            for chunk in chunks
-        }
+    # Open PDF ONCE and process page by page - NO temp files!
+    with pdfplumber.open(input_path) as pdf:
+        total_pages = len(pdf.pages)
         
-        for future in as_completed(futures):
-            chunk = futures[future]
-            chunk_pages = chunk.end_page - chunk.start_page + 1
+        if progress_callback:
+            progress_callback('start', 0, total_pages)
+        
+        for page_num, page in enumerate(pdf.pages, start=1):
             try:
-                res = future.result()
-                results.append((chunk.start_page, res))
-                pages_done += chunk_pages
+                # A. Zone Analysis
+                crop_box = zone_cleaner.get_crop_box(page)
                 
-                if progress_callback:
-                    total_pages = sum(c.end_page - c.start_page + 1 for c in chunks)
-                    progress_callback('progress', pages_done, total_pages)
+                # B. Smart OCR / Text Extraction
+                raw_text_check = page.filter(lambda obj: obj["object_type"] == "char").extract_text() or ""
+                ocr_text = smart_ocr.process_page(input_path, page_num, raw_text_check)
+                
+                if ocr_text and ocr_text != raw_text_check:
+                    # OCR Path
+                    clean_text = text_cleaner.clean_text(ocr_text)
+                    all_md_content.append(f"\n\n## Page {page_num}\n\n{clean_text}\n")
+                else:
+                    # C. Visual Extraction
+                    tables_md = []
+                    charts_md = []
+                    ignore_regions = []
                     
+                    # Neural Engine
+                    if config.extraction.use_neural_engine and config.extraction.tables_enabled:
+                        try:
+                            neural_tables, neural_charts, table_bboxes = neural_engine.process_page(page, page_num)
+                            tables_md.extend(neural_tables)
+                            ignore_regions.extend(table_bboxes)
+                            for chart in neural_charts:
+                                if config.extraction.charts_enabled:
+                                    charts_md.append(f"📊 *Chart detected on Page {page_num}* ({chart.chart_type})")
+                                ignore_regions.append((chart.bbox.x0, chart.bbox.y0, chart.bbox.x1, chart.bbox.y1))
+                        except Exception:
+                            pass
+                    
+                    # Legacy fallback
+                    if not tables_md and config.extraction.neural_fallback_to_legacy:
+                        legacy_tables = table_extractor.extract_tables(input_path, page_num, page)
+                        tables_md.extend(legacy_tables)
+                    
+                    # Structure extraction
+                    structured_text = structure_extractor.extract_text_with_structure(page, crop_box, ignore_regions)
+                    clean_text = text_cleaner.clean_text(structured_text)
+                    
+                    # Images
+                    images_md = image_extractor.extract_images(input_path, page_num)
+                    
+                    # Charts
+                    if config.extraction.charts_enabled and not charts_md:
+                        chart_results = visual_extractor.extract_visuals(input_path, page_num)
+                        charts_md.extend([link for link, bbox in chart_results])
+                    
+                    # Assembly
+                    page_md = f"\n\n## Page {page_num}\n"
+                    if charts_md: page_md += "\n" + "\n".join(charts_md) + "\n"
+                    if images_md: page_md += "\n" + "\n".join(images_md) + "\n"
+                    if tables_md: page_md += "\n" + "\n".join(tables_md) + "\n"
+                    page_md += f"\n{clean_text}\n"
+                    
+                    all_md_content.append(page_md)
+                    
+                    # Cleanup per-page variables
+                    del tables_md, charts_md, images_md, ignore_regions, structured_text, clean_text
+                
             except Exception as e:
-                logging.error(f"Chunk error pages {chunk.start_page}-{chunk.end_page}: {e}")
-                results.append((chunk.start_page, f"\n\n[ERROR: {e}]\n"))
-                pages_done += chunk_pages
+                logging.error(f"Page {page_num} error: {e}")
+                all_md_content.append(f"\n\n## Page {page_num}\n\n[ERROR: {e}]\n")
+            
+            # AGGRESSIVE MEMORY CLEANUP - every page
+            try:
+                page.flush_cache()
+            except:
+                pass
+            
+            # Progress update PER PAGE (smoother progress bar)
+            if progress_callback:
+                progress_callback('progress', page_num, total_pages)
+            
+            # Garbage collection every 10 pages (balance speed vs memory)
+            if page_num % 10 == 0:
+                gc.collect()
     
-    results.sort(key=lambda x: x[0])
-    return "\n".join([r[1] for r in results])
+    return "\n".join(all_md_content)
 
 
 @app.post("/api/convert-stream")
 async def convert_pdfs_stream(
     files: List[UploadFile] = File(...),
     output_path: Optional[str] = Form(None),
-    workers: int = Form(4),
+    workers: int = Form(4),  # Kept for API compatibility
     tables: bool = Form(True),
     ocr: str = Form("auto"),
     images: bool = Form(False),
     charts: bool = Form(False)
 ):
     """
-    SSE-based streaming conversion using PipelineController.
+    SSE-based streaming conversion - PAGE BY PAGE processing.
+    No temp files, no ProcessPoolExecutor.
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files provided.")
 
     async def event_stream() -> AsyncGenerator[str, None]:
+        import pdfplumber
+        import gc
+        
+        # Import processing components
+        from docuforge.src.cleaning.zones import ZoneCleaner
+        from docuforge.src.cleaning.artifacts import TextCleaner
+        from docuforge.src.extraction.tables import TableExtractor
+        from docuforge.src.extraction.structure import StructureExtractor
+        from docuforge.src.ingestion.ocr import SmartOCR
+        from docuforge.src.extraction.engine_neural import NeuralSpatialEngine
+        from docuforge.src.extraction.images import ImageExtractor
+        from docuforge.src.extraction.visuals import VisualExtractor
+        from docuforge.src.cleaning.watermark_analyzer import WatermarkAnalyzer
+        
         use_local_path = False
         target_dir = None
         
@@ -406,7 +658,6 @@ async def convert_pdfs_stream(
             config.extraction.images_enabled = images
             config.extraction.charts_enabled = charts
             config.ocr.enable = ocr
-            config.workers = workers
 
             for file_idx, file in enumerate(files):
                 if not file.filename.endswith('.pdf'):
@@ -426,26 +677,57 @@ async def convert_pdfs_stream(
                         doc_output_dir = request_temp_path / "output" / Path(file.filename).stem
                         doc_output_dir.mkdir(parents=True, exist_ok=True)
 
-                    # Unified Pipeline Logic
-                    loader = PDFLoader(chunk_size=10)
-                    chunks = list(loader.stream_chunks(input_path))
-                    total_pages = sum(chunk.end_page - chunk.start_page + 1 for chunk in chunks)
+                    # Quick page count for immediate correct progress bar
+                    import pdfplumber
+                    with pdfplumber.open(input_path) as pdf:
+                        quick_page_count = len(pdf.pages)
                     
-                    # Watermark Analysis - Pre-scan to find true watermarks (>60% of pages)
+                    # Immediate progress with correct total
+                    yield f"data: {json.dumps({'type': 'progress', 'file': file.filename, 'file_idx': file_idx, 'pages_done': 0, 'total_pages': quick_page_count, 'percent': 0, 'status': 'Analyzing...'})}\n\n"
+                    await asyncio.sleep(0.01)
+                    
+                    # Watermark Analysis
                     from docuforge.src.cleaning.watermark_analyzer import WatermarkAnalyzer
                     analyzer = WatermarkAnalyzer(input_path)
                     validated_watermarks = analyzer.analyze()
                     
+                    # PARALLEL PROCESSING with ProcessPoolExecutor
+                    loader = PDFLoader(chunk_size=10)
+                    chunks = list(loader.stream_chunks(input_path))
+                    total_pages = sum(chunk.end_page - chunk.start_page + 1 for chunk in chunks)
+                    
+                    # Progress ready to process
+                    yield f"data: {json.dumps({'type': 'progress', 'file': file.filename, 'file_idx': file_idx, 'pages_done': 0, 'total_pages': total_pages, 'percent': 0, 'status': 'Processing...'})}\n\n"
+                    await asyncio.sleep(0.01)
+                    
                     results = []
                     pages_done = 0
+                    cancelled = False
                     
-                    with ProcessPoolExecutor(max_workers=workers) as executor:
+                    # Reset cancel flag at start of processing
+                    global _cancel_requested, _active_executor
+                    _cancel_requested = False
+                    
+                    # Enforce worker limit to CPU count
+                    cpu_count = os.cpu_count() or 4
+                    actual_workers = min(workers, cpu_count)
+                    
+                    # Use limited worker count and store executor globally for cancellation
+                    executor = ProcessPoolExecutor(max_workers=actual_workers)
+                    _active_executor = executor
+                    
+                    try:
                         futures = {
                             executor.submit(PipelineController.process_chunk, chunk, config, doc_output_dir, validated_watermarks): chunk
                             for chunk in chunks
                         }
                         
                         for future in as_completed(futures):
+                            # Check if cancellation requested
+                            if _cancel_requested:
+                                cancelled = True
+                                break
+                            
                             chunk = futures[future]
                             chunk_pages = chunk.end_page - chunk.start_page + 1
                             
@@ -459,8 +741,14 @@ async def convert_pdfs_stream(
                             percent = int((pages_done / total_pages) * 100)
                             
                             yield f"data: {json.dumps({'type': 'progress', 'file': file.filename, 'file_idx': file_idx, 'pages_done': pages_done, 'total_pages': total_pages, 'percent': percent})}\n\n"
-                            
                             await asyncio.sleep(0.01)
+                    finally:
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        _active_executor = None
+                    
+                    # Skip save if cancelled
+                    if cancelled:
+                        continue
                     
                     results.sort(key=lambda x: x[0])
                     final_md = "\n".join([r[1] for r in results])
@@ -476,6 +764,15 @@ async def convert_pdfs_stream(
                     logging.error(f"Error processing {file.filename}: {e}")
                     yield f"data: {json.dumps({'type': 'file_error', 'file': file.filename, 'file_idx': file_idx, 'error': str(e)})}\n\n"
 
+            # FINAL CLEANUP: Clean all temp files after all files processed
+            temp_dir = Path("C:/Users/Public/DocuForge/Temp")
+            if temp_dir.exists():
+                for f in temp_dir.iterdir():
+                    try:
+                        f.unlink()
+                    except:
+                        pass
+            
             yield f"data: {json.dumps({'type': 'complete', 'total_files': len(files)})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

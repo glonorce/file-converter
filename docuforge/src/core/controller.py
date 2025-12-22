@@ -165,6 +165,21 @@ class PipelineController:
                     
                     chunk_md_content.append(page_md)
                     
+                    # CRITICAL: Memory cleanup for worker processes
+                    del tables_md, charts_md, images_md, ignore_regions
+                    del structured_text, clean_text, raw_text_check
+                    
+                    # Flush pdfplumber cache to release memory
+                    try:
+                        page.flush_cache()
+                    except:
+                        pass
+                    
+                    # GC every 5 pages (more aggressive for memory optimization)
+                    if (i + 1) % 5 == 0:
+                        import gc
+                        gc.collect()
+                    
         except Exception as e:
             from loguru import logger
             logger.error(f"Chunk processing failed for {chunk.source_path} (pages {chunk.start_page}-{chunk.end_page}): {e}")

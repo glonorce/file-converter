@@ -16,7 +16,6 @@ import logging
 from docuforge.src.core.config import AppConfig
 from docuforge.src.ingestion.loader import PDFLoader, PDFChunk
 from docuforge.src.core.controller import PipelineController
-from docuforge.src.core.controller import PipelineController
 from docuforge.src.core.utils import SafeFileManager
 from loguru import logger
 import sys
@@ -30,6 +29,19 @@ warnings.filterwarnings('ignore', message='.*non-stroke.*')
 warnings.filterwarnings('ignore', message='.*invalid float.*')
 logging.getLogger('pdfminer').setLevel(logging.ERROR)
 logging.getLogger('fitz').setLevel(logging.ERROR)
+
+# Suppress multiprocessing stderr pollution (OSError from killed workers)
+class _StderrFilter:
+    """Filter stderr to suppress multiprocessing errors from killed workers."""
+    def __init__(self, original):
+        self._original = original
+    def write(self, text):
+        if 'handle is closed' not in text and 'OSError' not in text:
+            self._original.write(text)
+    def flush(self):
+        self._original.flush()
+
+sys.stderr = _StderrFilter(sys.stderr)
 
 # Configure Logger: clean output for user
 logger.remove()
@@ -79,6 +91,30 @@ def _cleanup_lock():
             LOCK_FILE.unlink()
     except Exception:
         pass
+
+def _cleanup_temp():
+    """Clean DocuForge temp directory on exit."""
+    import shutil
+    import time
+    temp_dir = Path("C:/Users/Public/DocuForge/Temp")
+    
+    def clean():
+        if temp_dir.exists():
+            try:
+                shutil.rmtree(temp_dir)
+                temp_dir.mkdir(parents=True, exist_ok=True)
+            except:
+                for f in temp_dir.iterdir():
+                    try:
+                        f.unlink()
+                    except:
+                        pass
+    
+    clean()
+    time.sleep(2)  # Wait for late file writes
+    clean()
+
+atexit.register(_cleanup_temp)
 
 def _check_dependencies():
     """Check if required packages are installed."""
@@ -295,24 +331,57 @@ def convert(
                 
                 doc_full_md = []
                 
-                # Parallel Execution
-                with ProcessPoolExecutor(max_workers=workers) as executor:
-                    futures = {
-                        executor.submit(PipelineController.process_chunk, chunk, config, doc_context_dir, validated_watermarks): chunk.start_page 
-                        for chunk in chunks
-                    }
+                # Global executor for signal handling
+                import signal
+                _cli_executor = None
+                
+                def _sigint_handler(signum, frame):
+                    """Handle Ctrl+C by killing workers immediately."""
+                    nonlocal _cli_executor
                     
-                    results = []
-                    for future in as_completed(futures):
-                        start_page = futures[future]
+                    # Suppress stderr to prevent terminal pollution
+                    import io
+                    sys.stderr = io.StringIO()
+                    
+                    if _cli_executor:
                         try:
-                            res = future.result()
-                            results.append((start_page, res))
-                        except Exception as e:
-                            # Log error but don't break UI
-                            pass 
-                        
-                        progress.advance(file_task)
+                            import psutil
+                            current = psutil.Process(os.getpid())
+                            for child in current.children(recursive=True):
+                                try:
+                                    child.kill()
+                                except:
+                                    pass
+                        except:
+                            pass
+                        _cli_executor.shutdown(wait=False, cancel_futures=True)
+                    raise KeyboardInterrupt()
+                
+                old_handler = signal.signal(signal.SIGINT, _sigint_handler)
+                
+                # Parallel Execution
+                try:
+                    with ProcessPoolExecutor(max_workers=workers) as executor:
+                        _cli_executor = executor
+                        futures = {
+                            executor.submit(PipelineController.process_chunk, chunk, config, doc_context_dir, validated_watermarks): chunk.start_page 
+                            for chunk in chunks
+                        }
+                    
+                        results = []
+                        for future in as_completed(futures):
+                            start_page = futures[future]
+                            try:
+                                res = future.result()
+                                results.append((start_page, res))
+                            except Exception as e:
+                                # Log error but don't break UI
+                                pass 
+                            
+                            progress.advance(file_task)
+                finally:
+                    signal.signal(signal.SIGINT, old_handler)
+                    _cli_executor = None
                 
                 # Sort results
                 results.sort(key=lambda x: x[0])

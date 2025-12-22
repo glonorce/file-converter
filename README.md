@@ -96,11 +96,12 @@ Sihirbaz başladığında sizden **PDF Klasörü**, **Çıktı Yeri** ve **Geli�
 ## 🛠️ Ayarlar ve İpuçları
 
 *   **Parallel Workers:** İşlemci çekirdeklerinize göre otomatik önerilir. (Manuel komutta varsayılan: 4).
+    > ⚠️ **Not:** Worker sayısı arttıkça bellek (RAM) kullanımı artar. Örn: 4 worker ≈ 2GB, 2 worker ≈ 1GB.
 *   **Gelişmiş Seçenekler (Varsayılan: KAPALI):**
     *   **OCR:** Sadece taranmış/resim şeklindeki sayfalar için açın (Otomatik devreye girer).
     *   **Tables:** Tabloları analiz eder.
     *   **Images:** Resimleri ayıklar (Açıksa klasör oluşturur, kapalıysa oluşturmaz).
-    *   **Charts (Beta):** Grafikleri ayıklar (Düzensiz çalışabilir, deneyseldir).
+    *   **Charts (Beta):** Grafikleri ayıklar. ⚠️ *Sadece vektör grafikler için çalışır. Deneyseldir, düzensiz sonuç verebilir.*
     *   **Recursive Mode (CLI):** Alt klasörleri de tarar ve aynı klasör yapısını çıktıda oluşturur.
     *   **Header Sensitivity (0.6):** Sayfa numarası/kitap adı gibi tekrarlayan metinleri silme hassasiyetidir. (0.6 = %60 tekrar ediyorsa sil).
     *   **Removable Tags:** PDF'den silinmesini istediğiniz metinleri (filigran, watermark vb.) kalıcı listeye ekleyin. CLI veya Web arayüzünden yönetilebilir.
@@ -217,11 +218,12 @@ The wizard will ask for your **Input Directory**, **Output Path**, and **Advance
 ## 🛠️ Settings & Tips
 
 *   **Parallel Workers:** Automatically optimized based on your CPU cores. (CLI default: 4).
+    > ⚠️ **Note:** Higher worker count increases RAM usage. E.g., 4 workers ≈ 2GB, 2 workers ≈ 1GB.
 *   **Advanced Options (Default: OFF):**
     *   **OCR:** Enables text recognition for scanned pages.
     *   **Tables:** Extracts data tables.
     *   **Images:** Extracts embedded images (Creates folder only if found).
-    *   **Charts (Beta):** Extracts charts/graphs (Experimental, may be irregular).
+    *   **Charts (Beta):** Extracts charts/graphs. ⚠️ *Only works for vector graphics. Experimental, may produce irregular results.*
     *   **Recursive Mode (CLI):** Scans subdirectories and preserves the folder structure in output.
     *   **Header Sensitivity (0.6):** Controls removal of repeated text (headers/footers). 0.6 means "remove if present on 60% of pages".
     *   **Removable Tags:** Add text patterns (watermarks, etc.) to a persistent blocklist. Manage via CLI or Web UI.

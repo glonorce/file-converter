@@ -37,6 +37,7 @@ class WatermarkAnalyzer:
         
         # Count occurrences per pattern
         pattern_page_counts = {tag: 0 for tag in user_tags}
+        sample_size = 0
         
         try:
             with pdfplumber.open(self.pdf_path) as pdf:
@@ -45,8 +46,17 @@ class WatermarkAnalyzer:
                 if self.total_pages == 0:
                     return set()
                 
-                for page in pdf.pages:
+                # OPTIMIZATION: Sample pages instead of scanning ALL pages
+                # Scan first 10 pages + every 20th page after that
+                sample_indices = list(range(min(10, self.total_pages)))
+                sample_indices += list(range(19, self.total_pages, 20))
+                sample_size = len(set(sample_indices))
+                
+                for idx in set(sample_indices):
+                    if idx >= self.total_pages:
+                        continue
                     try:
+                        page = pdf.pages[idx]
                         text = page.extract_text() or ""
                         
                         # Check each pattern against this page
@@ -55,12 +65,15 @@ class WatermarkAnalyzer:
                                 pattern_page_counts[tag] += 1
                     except Exception:
                         continue
+                        
+                # Adjust threshold based on sample size
+                adjusted_threshold = self.WATERMARK_THRESHOLD * (sample_size / self.total_pages) if sample_size < self.total_pages else self.WATERMARK_THRESHOLD
         except Exception:
             return set()
         
-        # Validate: Only keep patterns that appear on >60% of pages
+        # Validate: Only keep patterns that appear on >60% of SAMPLED pages
         for tag, count in pattern_page_counts.items():
-            ratio = count / self.total_pages if self.total_pages > 0 else 0
+            ratio = count / sample_size if sample_size > 0 else 0
             if ratio >= self.WATERMARK_THRESHOLD:
                 self.validated_patterns.add(tag)
         

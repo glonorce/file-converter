@@ -49,8 +49,8 @@ class InteractiveWizard:
                 default=optimal_workers
             )
             
-            # 3.1 Strict Guard for "Absurd" numbers (> 1.5x cores)
-            if workers > cpu_count * 1.5:
+            # 3.1 Strict Guard for "Absurd" numbers (> cpu_count)
+            if workers > cpu_count:
                 console.print(f"[bold red]!!! DANGER !!![/bold red] [red]You requested {workers} workers on a {cpu_count}-core system.[/red]")
                 console.print("This will likely FREEZE your computer due to RAM exhaustion.")
                 

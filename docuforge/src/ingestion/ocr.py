@@ -401,10 +401,10 @@ class SmartOCR:
             
             try:
                 for page_num in range(1, total_pages + 1):
-                    # Load only ONE page at a time - prevents 4GB RAM usage
+                    # Load only ONE page at a time with reduced DPI for memory efficiency
                     images = convert_from_path(
                         str(input_pdf), 
-                        dpi=300,
+                        dpi=200,  # Reduced from 300 for ~40% less RAM
                         first_page=page_num,
                         last_page=page_num
                     )
@@ -535,12 +535,13 @@ class SmartOCR:
         from io import BytesIO
         
         try:
-            # Render page at 300 DPI (better for OCR than 400)
+            # Render page at 200 DPI (reduced from 300 for memory efficiency)
+            # 200 DPI is sufficient for OCR and uses ~40% less RAM
             images = convert_from_path(
                 str(pdf_path), 
                 first_page=page_num, 
                 last_page=page_num,
-                dpi=300
+                dpi=200
             )
             
             if images:
@@ -594,6 +595,14 @@ class SmartOCR:
         except Exception as e:
             logger.debug(f"Page {page_num}: OCR failed: {e}")
             return ""
+        finally:
+            # CRITICAL: Release image memory to prevent 4GB RAM bloat
+            try:
+                del images, ocr_image
+            except:
+                pass
+            import gc
+            gc.collect()
     
     def _ocr_with_modes(self, processed_image) -> tuple:
         """Multi-pass OCR with Sauvola thresholding and user-words for best results.

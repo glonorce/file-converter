@@ -34,11 +34,14 @@ class PDFLoader:
                     # Create a temporary subset
                     # Use a UUID-based name to prevent collisions across runs/processes
                     import uuid
-                    import tempfile
                     
-                    # We use the system temp dir which is faster/safer
+                    # Use Public/DocuForge/Temp instead of local temp
+                    # This keeps all temp files in one place and avoids local temp pollution
+                    chunk_temp_dir = Path("C:/Users/Public/DocuForge/Temp")
+                    chunk_temp_dir.mkdir(parents=True, exist_ok=True)
+                    
                     chunk_name = f"docuforge_{uuid.uuid4().hex}.pdf"
-                    chunk_path = Path(tempfile.gettempdir()) / chunk_name
+                    chunk_path = chunk_temp_dir / chunk_name
 
                     try:
                         new_pdf = pikepdf.new()

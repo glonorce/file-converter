@@ -1242,3 +1242,18 @@ body {
     color: white;
     box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
 }
+
+/* ===== Processing Mode - Hide/Disable Controls ===== */
+body.processing .f-remove {
+    display: none !important;
+}
+
+body.processing .setting-item input,
+body.processing .setting-item button,
+body.processing .ocr-btn,
+body.processing #workerInput,
+body.processing .toggle-switch,
+body.processing .tag-management {
+    pointer-events: none;
+    opacity: 0.5;
+}

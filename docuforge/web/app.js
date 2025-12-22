@@ -253,8 +253,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (isDone) icon = '✅';
             if (isError) icon = '❌';
 
-            // Show remove button if not currently processing
-            const showRemove = !file._processing;
+            // Show remove button ONLY if NOT processing globally
+            const showRemove = !isProcessing;
             // Show view button only if done
             const showView = isDone && file._outputPath;
 
@@ -359,6 +359,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Lock/unlock inputs during processing and toggle button
     function lockInputs() {
+        document.body.classList.add('processing');  // CSS handles hiding/disabling
         dropInput.classList.add('locked');
         dropOutput.classList.add('locked');
         // Transform button to stop mode
@@ -371,6 +372,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function unlockInputs() {
+        document.body.classList.remove('processing');  // CSS handles showing/enabling
         dropInput.classList.remove('locked');
         dropOutput.classList.remove('locked');
         // Transform button back to start mode
@@ -384,6 +386,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Stop processing function
     function stopProcessing() {
         if (abortController) {
+            // Cancel backend workers
+            fetch('/api/cancel', { method: 'POST' }).catch(() => { });
+
             abortController.abort();
             isProcessing = false;
             unlockInputs();
