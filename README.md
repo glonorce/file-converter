@@ -40,8 +40,8 @@ Bu araç güçlü motorlar (OCR, Tablo okuyucu) kullanır. Lütfen sırasıyla u
 
 ```powershell
 # 1. Projeyi İndirin
-git clone https://github.com/glonorce/file-converter.git
-cd file-converter
+git clone https://github.com/glonorce/pdf-to-markdown.git
+cd pdf-to-markdown
 
 # 2. Sanal Ortamı (Virtual Environment) Kurun
 python -m venv .venv
@@ -162,8 +162,8 @@ Navigate to your desired folder first.
 
 ```powershell
 # 1. Clone Repository
-git clone https://github.com/glonorce/file-converter.git
-cd file-converter
+git clone https://github.com/glonorce/pdf-to-markdown.git
+cd pdf-to-markdown
 
 # 2. Create Virtual Environment
 python -m venv .venv
