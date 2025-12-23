@@ -98,19 +98,21 @@ class PipelineController:
         try:
             # Check chunk file exists (may be deleted by race condition)
             import time
-            from docuforge.debug import debug_log
+            from docuforge.debug import debug_log, is_debug_enabled
             
-            # Debug: Chunk access tracking
-            debug_log("chunk_lifecycle", "Chunk ACCESSING",
-                path=str(chunk.temp_path),
-                exists=chunk.temp_path.exists())
+            # Debug: Chunk access tracking (guarded)
+            if is_debug_enabled("chunk_lifecycle"):
+                debug_log("chunk_lifecycle", "Chunk ACCESSING",
+                    path=str(chunk.temp_path),
+                    exists=chunk.temp_path.exists())
             
             if not chunk.temp_path.exists():
                 # Brief retry - file might still be writing
                 time.sleep(0.5)
                 if not chunk.temp_path.exists():
-                    debug_log("chunk_lifecycle", "Chunk MISSING AFTER RETRY",
-                        path=str(chunk.temp_path))
+                    if is_debug_enabled("chunk_lifecycle"):
+                        debug_log("chunk_lifecycle", "Chunk MISSING AFTER RETRY",
+                            path=str(chunk.temp_path))
                     from loguru import logger
                     logger.error(f"Chunk file not found: {chunk.temp_path}")
                     return f"\n\n[ERROR: Chunk file missing for pages {chunk.start_page}-{chunk.end_page}]\n"
@@ -205,8 +207,9 @@ class PipelineController:
             return f"\n\n[ERROR: Failed to process pages {chunk.start_page}-{chunk.end_page}: {str(e)}]\n"
         finally:
             # E. Safe Cleanup
-            from docuforge.debug import debug_log
-            debug_log("chunk_lifecycle", "Chunk CONTROLLER_DELETE", path=str(chunk.temp_path))
+            from docuforge.debug import debug_log, is_debug_enabled
+            if is_debug_enabled("chunk_lifecycle"):
+                debug_log("chunk_lifecycle", "Chunk CONTROLLER_DELETE", path=str(chunk.temp_path))
             SafeFileManager.safe_delete(chunk.temp_path)
                 
         return "\n".join(chunk_md_content)

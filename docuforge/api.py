@@ -718,14 +718,15 @@ async def convert_pdfs_stream(
                     _active_executor = executor
                     
                     try:
-                        # Debug: Executor lifecycle tracking
-                        from docuforge.debug import debug_log
-                        temp_dir_debug = Path("C:/Users/Public/DocuForge/Temp")
-                        chunk_status = {c.temp_path.name: c.temp_path.exists() for c in chunks}
-                        debug_log("executor_lifecycle", "BEFORE_SUBMIT",
-                            file=file.filename,
-                            temp_dir_contents=[f.name for f in temp_dir_debug.iterdir()],
-                            chunks_exist=chunk_status)
+                        # Debug: Executor lifecycle tracking (guarded to avoid I/O when disabled)
+                        from docuforge.debug import debug_log, is_debug_enabled
+                        if is_debug_enabled("executor_lifecycle"):
+                            temp_dir_debug = Path("C:/Users/Public/DocuForge/Temp")
+                            chunk_status = {c.temp_path.name: c.temp_path.exists() for c in chunks}
+                            debug_log("executor_lifecycle", "BEFORE_SUBMIT",
+                                file=file.filename,
+                                temp_dir_contents=[f.name for f in temp_dir_debug.iterdir()],
+                                chunks_exist=chunk_status)
                         
                         futures = {
                             executor.submit(PipelineController.process_chunk, chunk, config, doc_output_dir, validated_watermarks): chunk
@@ -756,13 +757,14 @@ async def convert_pdfs_stream(
                         executor.shutdown(wait=True)  # Wait for workers to complete before next PDF
                         _active_executor = None
                         
-                        # Debug: Executor lifecycle tracking
-                        from docuforge.debug import debug_log
-                        temp_dir_debug = Path("C:/Users/Public/DocuForge/Temp")
-                        temp_contents = [f.name for f in temp_dir_debug.iterdir()] if temp_dir_debug.exists() else "DIR_NOT_EXISTS"
-                        debug_log("executor_lifecycle", "AFTER_SHUTDOWN",
-                            file=file.filename,
-                            temp_dir_contents=temp_contents)
+                        # Debug: Executor lifecycle tracking (guarded to avoid I/O when disabled)
+                        from docuforge.debug import debug_log, is_debug_enabled
+                        if is_debug_enabled("executor_lifecycle"):
+                            temp_dir_debug = Path("C:/Users/Public/DocuForge/Temp")
+                            temp_contents = [f.name for f in temp_dir_debug.iterdir()] if temp_dir_debug.exists() else "DIR_NOT_EXISTS"
+                            debug_log("executor_lifecycle", "AFTER_SHUTDOWN",
+                                file=file.filename,
+                                temp_dir_contents=temp_contents)
                     
                     # Skip save if cancelled
                     if cancelled:

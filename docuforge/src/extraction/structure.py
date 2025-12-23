@@ -8,6 +8,13 @@ class StructureExtractor:
         # PERF-P1-001: Create TextHealer once instead of per-line
         from docuforge.src.cleaning.healer import TextHealer
         self._healer = TextHealer()
+        
+        # PERF: Cache watermark tags to avoid loading config for every line
+        try:
+            from docuforge.src.core.tag_manager import TagManager
+            self._watermark_tags = TagManager().load_user_tags()
+        except:
+            self._watermark_tags = set()
 
     def _normalize_text(self, text: str) -> str:
         """Apply Unicode normalization to fix font encoding issues."""
@@ -146,12 +153,8 @@ class StructureExtractor:
         if not minority_chars:
             return chars
         
-        # Get watermark tags from user config
-        try:
-            from docuforge.src.core.tag_manager import TagManager
-            user_tags = TagManager().load_user_tags()
-        except:
-            user_tags = set()
+        # Use cached watermark tags (loaded once in __init__)
+        user_tags = self._watermark_tags
         
         # If no tags defined, DON'T filter (safe default - preserves all text)
         if not user_tags:
