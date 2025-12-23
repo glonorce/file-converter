@@ -283,23 +283,74 @@ class StructureExtractor:
         min_size_diff = 2  # Minimum 2pt difference to be considered a heading
         max_heading_length = 150  # Headings typically aren't this long
         
+        # First pass: identify which lines are "large font"
+        large_font_indices = set()
+        for i, line in enumerate(lines):
+            if (line['max_size'] >= header_threshold and 
+                line['max_size'] - body_size >= min_size_diff):
+                large_font_indices.add(i)
+        
+        # Second pass: detect consecutive large font blocks and determine heading vs quote
+        # Rules:
+        # - Single large font line with ≤3 words = heading
+        # - Single large font line with >3 words = blockquote  
+        # - Multi-line block: first line ≤3 words = first is heading, rest is quote
+        # - Multi-line block: first line >3 words = all are quote
+        
+        heading_indices = set()
+        quote_block_indices = set()
+        max_heading_words = 3  # Maximum words for a heading
+        
+        i = 0
+        while i < len(lines):
+            if i in large_font_indices:
+                # Count consecutive large font lines
+                start = i
+                while i < len(lines) and i in large_font_indices:
+                    i += 1
+                block_length = i - start
+                
+                # Check first line word count
+                first_line_text = lines[start]['text']
+                first_line_word_count = len(first_line_text.split())
+                
+                if block_length == 1:
+                    # Single line: heading if ≤3 words
+                    if first_line_word_count <= max_heading_words:
+                        heading_indices.add(start)
+                    else:
+                        quote_block_indices.add(start)
+                else:
+                    # Multi-line block
+                    if first_line_word_count <= max_heading_words:
+                        # First line is heading, rest are quote
+                        heading_indices.add(start)
+                        for j in range(start + 1, i):
+                            quote_block_indices.add(j)
+                    else:
+                        # All lines are quote
+                        for j in range(start, i):
+                            quote_block_indices.add(j)
+            else:
+                i += 1
+        
         md_lines = []
-        for line in lines:
+        in_quote_block = False
+        
+        for idx, line in enumerate(lines):
             text = line['text']
             max_size = line['max_size']
             
             # Apply Healer
             text = self._healer.heal_document(text)
             
-            # Heading detection with extra conditions to reduce false positives
-            is_heading = (
-                max_size >= header_threshold and
-                max_size - body_size >= min_size_diff and  # Must be at least 2pt larger
-                len(text) < max_heading_length  # Long lines aren't headings
-            )
-            
-            if is_heading:
-                 # Determine H1 vs H2 vs H3
+            # Check if this is a heading
+            if idx in heading_indices:
+                if in_quote_block:
+                    md_lines.append("")  # Empty line after quote
+                    in_quote_block = False
+                
+                # Determine H1 vs H2 vs H3
                 if max_size > body_size * 2:
                     prefix = "# "
                 elif max_size > body_size * 1.5:
@@ -307,7 +358,18 @@ class StructureExtractor:
                 else:
                     prefix = "### "
                 md_lines.append(f"\n{prefix}{text}\n")
+            
+            # Check if this is part of a quote block
+            elif idx in quote_block_indices:
+                if not in_quote_block:
+                    md_lines.append("")  # Empty line before quote
+                    in_quote_block = True
+                # Format as blockquote (or just emphasized text)
+                md_lines.append(f"> *{text}*")
             else:
+                if in_quote_block:
+                    md_lines.append("")  # Empty line after quote
+                    in_quote_block = False
                 md_lines.append(text)
                 
         return "\n".join(md_lines)
