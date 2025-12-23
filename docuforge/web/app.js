@@ -545,6 +545,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         isProcessing = false;
         abortController = null;
         unlockInputs();  // Unlock inputs after processing
+        renderQueue();   // Refresh UI to show X buttons
         stopElapsedTimer();
         setStatus(i18n[currentLang].complete);
         updateState();

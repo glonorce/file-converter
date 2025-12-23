@@ -96,6 +96,25 @@ class PipelineController:
         chunk_md_content = []
         
         try:
+            # Check chunk file exists (may be deleted by race condition)
+            import time
+            from docuforge.debug import debug_log
+            
+            # Debug: Chunk access tracking
+            debug_log("chunk_lifecycle", "Chunk ACCESSING",
+                path=str(chunk.temp_path),
+                exists=chunk.temp_path.exists())
+            
+            if not chunk.temp_path.exists():
+                # Brief retry - file might still be writing
+                time.sleep(0.5)
+                if not chunk.temp_path.exists():
+                    debug_log("chunk_lifecycle", "Chunk MISSING AFTER RETRY",
+                        path=str(chunk.temp_path))
+                    from loguru import logger
+                    logger.error(f"Chunk file not found: {chunk.temp_path}")
+                    return f"\n\n[ERROR: Chunk file missing for pages {chunk.start_page}-{chunk.end_page}]\n"
+            
             with pdfplumber.open(chunk.temp_path) as pdf:
                 for i, page in enumerate(pdf.pages):
                     page_num = chunk.start_page + i
@@ -186,6 +205,8 @@ class PipelineController:
             return f"\n\n[ERROR: Failed to process pages {chunk.start_page}-{chunk.end_page}: {str(e)}]\n"
         finally:
             # E. Safe Cleanup
+            from docuforge.debug import debug_log
+            debug_log("chunk_lifecycle", "Chunk CONTROLLER_DELETE", path=str(chunk.temp_path))
             SafeFileManager.safe_delete(chunk.temp_path)
                 
         return "\n".join(chunk_md_content)

@@ -24,6 +24,7 @@ logs/
 *.log
 config.yaml
 test_output_neural/
+test_output/
 debug_pdf.py
 
 # Temp / OS
@@ -40,3 +41,7 @@ docuforge/src/cleaning/dicts/*.txt
 SYSTEM_DOCUMENTATION.md
 DEV_NOTES.md
 debug_*.txt
+
+# Debug System Logs (project-local)
+docuforge/debug/logs/
+chunk_debug.txt

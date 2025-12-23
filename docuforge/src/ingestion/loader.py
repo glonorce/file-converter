@@ -50,6 +50,18 @@ class PDFLoader:
                             new_pdf.pages.append(pdf.pages[i])
                         
                         new_pdf.save(chunk_path)
+                        
+                        # Debug: Chunk lifecycle tracking
+                        from docuforge.debug import debug_log
+                        if chunk_path.exists():
+                            temp_files = [f.name for f in chunk_temp_dir.iterdir()]
+                            debug_log("chunk_lifecycle", "Chunk CREATED",
+                                path=str(chunk_path),
+                                size=chunk_path.stat().st_size,
+                                temp_dir_contents=temp_files)
+                        else:
+                            debug_log("chunk_lifecycle", "Chunk NOT CREATED", path=str(chunk_path))
+                        
                         yield PDFChunk(
                             source_path=pdf_path,
                             start_page=start_page,

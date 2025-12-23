@@ -104,15 +104,20 @@ def _cleanup_temp():
                 shutil.rmtree(temp_dir)
                 temp_dir.mkdir(parents=True, exist_ok=True)
             except:
-                for f in temp_dir.iterdir():
-                    try:
-                        f.unlink()
-                    except:
-                        pass
+                # Fallback: dir might still exist but some files locked
+                if temp_dir.exists():
+                    for f in temp_dir.iterdir():
+                        try:
+                            f.unlink()
+                        except:
+                            pass
     
-    clean()
-    time.sleep(2)  # Wait for late file writes
-    clean()
+    try:
+        clean()
+        time.sleep(2)  # Wait for late file writes
+        clean()
+    except:
+        pass  # Silently ignore any cleanup errors
 
 atexit.register(_cleanup_temp)
 
