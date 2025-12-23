@@ -89,6 +89,7 @@ Sihirbaz başladığında sizden **PDF Klasörü**, **Çıktı Yeri** ve **Geli�
 
 ### 🌐 Web Arayüzü Özellikleri
 - **MD Görüntüleme:** İşlem biten dosyalarda 👁 butonuna tıklayarak Markdown'ı tarayıcıda görüntüleyin
+- **MD Görüntüleyici/Düzenleyici:** Herhangi bir MD dosyasını seçip 3 farklı modda (Klasik/Varsayılan/Ham) görüntüleyin, düzenleyin ve indirin
 - **HTML İndirme:** Görüntüleme sayfasında "HTML İndir" butonu ile stillenmiş HTML olarak kaydedin
 
 > **İpucu:** Tüm mevcut komutları görmek için: `python -m docuforge.main --help`
@@ -211,6 +212,7 @@ The wizard will ask for your **Input Directory**, **Output Path**, and **Advance
 
 ### 🌐 Web Interface Features
 - **MD Viewer:** Click the 👁 button on completed files to preview Markdown in browser
+- **MD Viewer/Editor:** Select any MD file and view in 3 modes (Classic/Default/Raw), edit and download
 - **HTML Download:** Save as styled HTML using the "HTML Download" button in the preview
 
 > **Tip:** To see all available commands: `python -m docuforge.main --help`

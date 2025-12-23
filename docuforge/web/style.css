@@ -27,7 +27,8 @@
     --shadow-glow: 0 0 60px rgba(99, 102, 241, 0.15);
     --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
 
-    --glass-blur: 20px;
+    --glass-blur: 0px;
+    /* Disabled for performance */
     --radius-sm: 8px;
     --radius-md: 12px;
     --radius-lg: 16px;
@@ -1256,4 +1257,303 @@ body.processing .toggle-switch,
 body.processing .tag-management {
     pointer-events: none;
     opacity: 0.5;
+}
+
+/* ===== MD Viewer Toolbar ===== */
+.md-viewer-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    backdrop-filter: blur(var(--glass-blur));
+    margin: 0 20px;
+}
+
+.md-file-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.md-toolbar-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.md-toolbar-btn:hover {
+    background: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary);
+}
+
+.md-toolbar-btn svg {
+    stroke: currentColor;
+}
+
+.md-file-name {
+    font-size: 12px;
+    color: var(--text-muted);
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.md-view-modes {
+    display: flex;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: 3px;
+    border: 1px solid var(--border-primary);
+}
+
+.md-mode-btn {
+    padding: 6px 14px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.md-mode-btn:hover {
+    color: var(--text-primary);
+}
+
+.md-mode-btn.active {
+    background: var(--accent-primary);
+    color: white;
+    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+}
+
+.md-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.md-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.md-action-btn:hover:not(:disabled) {
+    background: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary);
+}
+
+.md-action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.md-action-btn svg {
+    stroke: currentColor;
+}
+
+/* MD Viewer Modal */
+.md-viewer-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(2px);
+    z-index: 1000;
+    padding: 40px;
+}
+
+.md-viewer-modal.active {
+    display: flex;
+    flex-direction: column;
+}
+
+.md-viewer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border: 1px solid var(--border-primary);
+    border-bottom: none;
+}
+
+.md-viewer-content {
+    flex: 1;
+    padding: 24px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    overflow: auto;
+}
+
+.md-viewer-content.mode-classic {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.md-viewer-content.mode-classic h1,
+.md-viewer-content.mode-classic h2,
+.md-viewer-content.mode-classic h3 {
+    border-bottom: 1px solid var(--border-primary);
+    padding-bottom: 8px;
+    margin-top: 24px;
+}
+
+.md-viewer-content.mode-classic table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+}
+
+.md-viewer-content.mode-classic th,
+.md-viewer-content.mode-classic td {
+    border: 1px solid var(--border-primary);
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.md-viewer-content.mode-classic th {
+    background: var(--bg-tertiary);
+}
+
+.md-viewer-content.mode-classic blockquote {
+    border-left: 4px solid var(--accent-primary);
+    padding-left: 16px;
+    margin: 16px 0;
+    color: var(--text-secondary);
+}
+
+.md-viewer-content.mode-raw {
+    font-family: 'JetBrains Mono', monospace;
+    white-space: pre-wrap;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* Default mode - DocuForge style (purple accent, compact) */
+.md-viewer-content.mode-default {
+    font-family: 'Inter', sans-serif;
+    line-height: 1.5;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.md-viewer-content.mode-default h1,
+.md-viewer-content.mode-default h2,
+.md-viewer-content.mode-default h3 {
+    color: var(--accent-primary);
+    margin-top: 20px;
+    margin-bottom: 8px;
+}
+
+.md-viewer-content.mode-default h1 {
+    font-size: 1.8em;
+}
+
+.md-viewer-content.mode-default h2 {
+    font-size: 1.4em;
+}
+
+.md-viewer-content.mode-default h3 {
+    font-size: 1.2em;
+}
+
+.md-viewer-content.mode-default table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.md-viewer-content.mode-default th,
+.md-viewer-content.mode-default td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.md-viewer-content.mode-default th {
+    background: var(--accent-primary);
+    color: white;
+    font-weight: 600;
+}
+
+.md-viewer-content.mode-default blockquote {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+    border-left: 3px solid var(--accent-primary);
+    padding: 12px 16px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    margin: 12px 0;
+}
+
+.md-viewer-content.mode-default a {
+    color: var(--accent-tertiary);
+    text-decoration: none;
+}
+
+.md-viewer-content.mode-default a:hover {
+    text-decoration: underline;
+}
+
+.md-close-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border-primary);
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.md-close-btn:hover {
+    background: #ef4444;
+    color: white;
+    border-color: #ef4444;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .md-viewer-toolbar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .md-actions {
+        margin-left: 0;
+    }
 }

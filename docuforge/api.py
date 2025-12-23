@@ -11,6 +11,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 import uvicorn
 import tkinter as tk
 from tkinter import filedialog
@@ -240,6 +241,139 @@ def remove_tag(pattern: str = Form(...)):
         raise HTTPException(status_code=404, detail=f"Pattern not found: {pattern}")
 
 # --- MD Viewer API ---
+
+class RenderMdRequest(BaseModel):
+    content: str
+    filename: str = "document"
+
+@app.post("/api/render-md")
+def render_markdown(request: RenderMdRequest):
+    """
+    Render markdown content as styled HTML.
+    Same styling as view_markdown but accepts content directly.
+    """
+    import markdown
+    
+    md_content = request.content
+    file_name = request.filename.replace('.md', '')
+    
+    # Convert MD to HTML with extensions
+    html_content = markdown.markdown(md_content, extensions=['tables', 'fenced_code', 'toc'])
+    
+    # Wrap tables in responsive container
+    html_content = html_content.replace('<table>', '<div class="table-responsive"><table>')
+    html_content = html_content.replace('</table>', '</table></div>')
+    
+    # Full styled HTML page (same as view_markdown)
+    html_page = f'''<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{file_name} - DocuForge</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+            color: #e0e0e0;
+            padding: 40px;
+            line-height: 1.8;
+            min-height: 100vh;
+        }}
+        .container {{
+            max-width: 95vw;
+            margin: 0 auto;
+            background: rgba(26, 26, 46, 0.9);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }}
+        h1, h2, h3, h4 {{ color: #a78bfa; margin: 1em 0 0.5em; }}
+        h1 {{ font-size: 2em; border-bottom: 2px solid #6366f1; padding-bottom: 10px; }}
+        h2 {{ font-size: 1.5em; color: #818cf8; }}
+        p {{ margin: 1em 0; }}
+        .table-responsive {{ width: 100%; margin: 1em 0; }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(30, 30, 50, 0.5);
+            border-radius: 8px;
+            table-layout: fixed;
+        }}
+        th, td {{
+            padding: 8px 10px;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            text-align: left;
+            word-wrap: break-word;
+        }}
+        th {{ background: rgba(99, 102, 241, 0.2); color: #a78bfa; font-size: 0.85em; }}
+        td {{ font-size: 0.8em; }}
+        tr:hover {{ background: rgba(99, 102, 241, 0.1); }}
+        code {{
+            background: rgba(99, 102, 241, 0.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            color: #c4b5fd;
+        }}
+        pre {{ background: #0d0d1a; padding: 16px; border-radius: 8px; overflow-x: auto; margin: 1em 0; }}
+        pre code {{ background: none; padding: 0; }}
+        a {{ color: #818cf8; }}
+        .header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+        }}
+        .header h1 {{ border: none; margin: 0; padding: 0; }}
+        .badge {{
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+        }}
+        .download-btn {{
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+        }}
+        .download-btn:hover {{ transform: scale(1.05); }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 {file_name}</h1>
+            <div style="display:flex;gap:10px;align-items:center;">
+                <button class="download-btn" onclick="downloadHTML()">💾 HTML İndir</button>
+                <span class="badge">DocuForge</span>
+            </div>
+        </div>
+        {html_content}
+    </div>
+    <script>
+        function downloadHTML() {{
+            const b = new Blob([document.documentElement.outerHTML], {{ type: 'text/html' }});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(b);
+            a.download = '{file_name}.html';
+            a.click();
+        }}
+    </script>
+</body>
+</html>'''
+    
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(content=html_page)
 
 @app.get("/api/view-md")
 def view_markdown(path: str):

@@ -33,7 +33,14 @@ const i18n = {
         warning_line2: "Verification recommended",
         ocr_off: "Off",
         ocr_auto: "Auto",
-        ocr_on: "On"
+        ocr_on: "On",
+        md_viewer: "MD Viewer",
+        select_md: "Select MD File",
+        view_classic: "Classic",
+        view_html: "HTML",
+        view_raw: "Raw",
+        edit_md: "Edit",
+        download_md: "Download"
     },
     tr: {
         input_title: "Kaynak Dosyalar",
@@ -67,7 +74,14 @@ const i18n = {
         warning_line2: "Kontrol etmenizde fayda var",
         ocr_off: "Kapalı",
         ocr_auto: "Otomatik",
-        ocr_on: "Açık"
+        ocr_on: "Açık",
+        md_viewer: "MD Görüntüleyici",
+        select_md: "MD Dosya Seç",
+        view_classic: "Klasik",
+        view_html: "HTML",
+        view_raw: "Ham",
+        edit_md: "Düzenle",
+        download_md: "İndir"
     }
 };
 
@@ -685,4 +699,293 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Apply translations on startup (for OCR button sizing)
     applyTranslations();
+
+    // ===== MD Viewer Functionality =====
+    const mdFileInput = document.getElementById('mdFileInput');
+    const selectMdBtn = document.getElementById('selectMdBtn');
+    const mdFileName = document.getElementById('mdFileName');
+    const editMdBtn = document.getElementById('editMdBtn');
+    const downloadMdBtn = document.getElementById('downloadMdBtn');
+    const mdModeBtns = document.querySelectorAll('.md-mode-btn');
+
+    let currentMdContent = '';
+    let currentMdName = '';
+    let currentViewMode = 'classic';
+    const viewMdBtn = document.getElementById('viewMdBtn');
+
+    // Select MD file button
+    selectMdBtn.onclick = () => mdFileInput.click();
+
+    // View button - opens viewer
+    viewMdBtn.onclick = () => {
+        if (currentMdContent) openMdViewer();
+    };
+
+    // File input change handler
+    mdFileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            currentMdName = file.name;
+            mdFileName.textContent = file.name;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                currentMdContent = event.target.result;
+                viewMdBtn.disabled = false;
+                editMdBtn.disabled = false;
+                downloadMdBtn.disabled = false;
+
+                // Auto-open viewer
+                openMdViewer();
+            };
+            reader.readAsText(file);
+        }
+    };
+
+    // View mode buttons
+    mdModeBtns.forEach(btn => {
+        btn.onclick = () => {
+            mdModeBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentViewMode = btn.dataset.mode;
+
+            // Update viewer if open
+            const modal = document.getElementById('mdViewerModal');
+            if (modal && modal.classList.contains('active')) {
+                renderMdContent();
+            }
+        };
+    });
+
+    // Simple markdown to HTML parser
+    function parseMarkdown(md) {
+        let html = md
+            // Headers
+            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+            // Bold & Italic
+            .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            // Links
+            .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>')
+            // Blockquotes
+            .replace(/^> (.*$)/gm, '<blockquote>$1</blockquote>')
+            // Horizontal rules
+            .replace(/^---$/gm, '<hr>')
+            // Lists
+            .replace(/^\- (.*$)/gm, '<li>$1</li>')
+            // Line breaks
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>');
+
+        // Wrap in paragraph
+        html = '<p>' + html + '</p>';
+
+        // Parse tables
+        const tableRegex = /\|(.+)\|\n\|[-|]+\|\n((?:\|.+\|\n?)+)/g;
+        html = html.replace(tableRegex, (match, header, body) => {
+            const headers = header.split('|').filter(h => h.trim());
+            const rows = body.trim().split('\n').map(row =>
+                row.split('|').filter(c => c.trim())
+            );
+
+            let table = '<table><thead><tr>';
+            headers.forEach(h => table += `<th>${h.trim()}</th>`);
+            table += '</tr></thead><tbody>';
+            rows.forEach(row => {
+                table += '<tr>';
+                row.forEach(cell => table += `<td>${cell.trim()}</td>`);
+                table += '</tr>';
+            });
+            table += '</tbody></table>';
+            return table;
+        });
+
+        return html;
+    }
+
+    function renderMdContent() {
+        const content = document.getElementById('mdViewerContent');
+        if (!content) return;
+
+        content.className = 'md-viewer-content';
+
+        switch (currentViewMode) {
+            case 'classic':
+                content.classList.add('mode-classic');
+                content.innerHTML = parseMarkdown(currentMdContent);
+                break;
+            case 'html':
+                // Use server-side markdown rendering with proper table support
+                fetch('/api/render-md', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: currentMdContent, filename: currentMdName })
+                })
+                    .then(r => r.text())
+                    .then(html => {
+                        const blob = new Blob([html], { type: 'text/html' });
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, '_blank');
+                    })
+                    .catch(e => console.error('HTML render failed:', e));
+                // Show message in viewer
+                content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">HTML yeni sekmede açıldı / HTML opened in new tab</div>';
+                break;
+            case 'raw':
+                content.classList.add('mode-raw');
+                content.textContent = currentMdContent;
+                break;
+        }
+    }
+
+    let isEditing = false;
+
+    function openMdViewer() {
+        const t = i18n[currentLang]; // Get translations
+        isEditing = false; // Reset edit mode
+
+        // Always remove and recreate modal for correct i18n
+        let existingModal = document.getElementById('mdViewerModal');
+        if (existingModal) existingModal.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'mdViewerModal';
+        modal.className = 'md-viewer-modal active';
+        modal.innerHTML = `
+            <div class="md-viewer-header">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span id="modalFileName" style="font-weight:600;color:var(--text-primary);">${currentMdName}</span>
+                    <div class="md-view-modes" id="modalViewModes">
+                        <button class="md-mode-btn ${currentViewMode === 'classic' ? 'active' : ''}" data-mode="classic">${t.view_classic}</button>
+                        <button class="md-mode-btn ${currentViewMode === 'html' ? 'active' : ''}" data-mode="html">${t.view_html}</button>
+                        <button class="md-mode-btn ${currentViewMode === 'raw' ? 'active' : ''}" data-mode="raw">${t.view_raw}</button>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <button id="modalEditBtn" class="md-action-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                        <span>${t.edit_md}</span>
+                    </button>
+                    <button id="modalDownloadBtn" class="md-action-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        <span>${t.download_md}</span>
+                    </button>
+                    <button class="md-close-btn" id="closeMdModal">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="md-viewer-content" id="mdViewerContent"></div>
+        `;
+        document.body.appendChild(modal);
+
+        // Close button
+        document.getElementById('closeMdModal').onclick = () => {
+            modal.remove();
+        };
+
+        // Modal view mode buttons
+        document.querySelectorAll('#modalViewModes .md-mode-btn').forEach(btn => {
+            btn.onclick = () => {
+                if (isEditing) {
+                    isEditing = false; // Exit edit mode when switching views
+                }
+                document.querySelectorAll('#modalViewModes .md-mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentViewMode = btn.dataset.mode;
+
+                // Sync toolbar buttons
+                mdModeBtns.forEach(b => {
+                    b.classList.toggle('active', b.dataset.mode === currentViewMode);
+                });
+
+                renderMdContent();
+            };
+        });
+
+        // Close on backdrop click
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        };
+
+        // Modal Edit button - toggle edit mode
+        document.getElementById('modalEditBtn').onclick = () => {
+            if (isEditing) {
+                // Exit edit mode - back to current view
+                isEditing = false;
+                renderMdContent();
+            } else {
+                // Enter edit mode
+                isEditing = true;
+                const content = document.getElementById('mdViewerContent');
+                content.className = 'md-viewer-content mode-raw';
+                content.innerHTML = `<textarea id="mdEditArea" style="width:100%;height:100%;background:transparent;border:none;color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:13px;resize:none;outline:none;">${currentMdContent}</textarea>`;
+                document.getElementById('mdEditArea').oninput = (e) => {
+                    currentMdContent = e.target.value;
+                };
+            }
+        };
+
+        // Modal Download button
+        document.getElementById('modalDownloadBtn').onclick = () => {
+            if (!currentMdContent) return;
+            const blob = new Blob([currentMdContent], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = currentMdName || 'document.md';
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
+        renderMdContent();
+    }
+
+    // Edit button - opens editable content
+    editMdBtn.onclick = () => {
+        if (!currentMdContent) return;
+
+        let modal = document.getElementById('mdViewerModal');
+        if (!modal) {
+            openMdViewer();
+            modal = document.getElementById('mdViewerModal');
+        }
+
+        modal.classList.add('active');
+        const content = document.getElementById('mdViewerContent');
+        content.className = 'md-viewer-content mode-raw';
+        content.innerHTML = `<textarea id="mdEditArea" style="width:100%;height:100%;background:transparent;border:none;color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:13px;resize:none;outline:none;">${currentMdContent}</textarea>`;
+
+        document.getElementById('mdEditArea').oninput = (e) => {
+            currentMdContent = e.target.value;
+        };
+    };
+
+    // Download button
+    downloadMdBtn.onclick = () => {
+        if (!currentMdContent) return;
+
+        const blob = new Blob([currentMdContent], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = currentMdName || 'document.md';
+        a.click();
+        URL.revokeObjectURL(url);
+    };
 });
