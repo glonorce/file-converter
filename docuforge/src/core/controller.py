@@ -71,27 +71,46 @@ class PipelineController:
         PipelineController.initialize_worker()
 
         # 2. Local Imports (Prevent pickling issues + Circular deps)
+        # Core modules - always needed
         from docuforge.src.cleaning.zones import ZoneCleaner
         from docuforge.src.cleaning.artifacts import TextCleaner
-        from docuforge.src.extraction.tables import TableExtractor
-        from docuforge.src.extraction.images import ImageExtractor
-        from docuforge.src.extraction.visuals import VisualExtractor
         from docuforge.src.extraction.structure import StructureExtractor
-        from docuforge.src.ingestion.ocr import SmartOCR
-        from docuforge.src.extraction.engine_neural import NeuralSpatialEngine
         from loguru import logger
         
-        # 3. Instantiate Engines
+        # 3. Instantiate Core Engines (always needed)
         zone_cleaner = ZoneCleaner(config.cleaning)
         text_cleaner = TextCleaner(config.cleaning, validated_watermarks=validated_watermarks)
-        table_extractor = TableExtractor(config.extraction)  # Legacy fallback
         structure_extractor = StructureExtractor()
-        smart_ocr = SmartOCR(config.ocr)
-        neural_engine = NeuralSpatialEngine(config.extraction)  # New Neural Engine
         
-        # Visual/Image extractors need output dir
-        image_extractor = ImageExtractor(config.extraction, output_dir=doc_output_dir)
-        visual_extractor = VisualExtractor(config.extraction, output_dir=doc_output_dir)
+        # 4. LAZY LOADING - Only import/instantiate enabled modules
+        # Tables (Legacy + Neural)
+        table_extractor = None
+        neural_engine = None
+        if config.extraction.tables_enabled:
+            from docuforge.src.extraction.tables import TableExtractor
+            table_extractor = TableExtractor(config.extraction)
+            
+            if config.extraction.use_neural_engine:
+                from docuforge.src.extraction.engine_neural import NeuralSpatialEngine
+                neural_engine = NeuralSpatialEngine(config.extraction)
+        
+        # Images
+        image_extractor = None
+        if config.extraction.images_enabled:
+            from docuforge.src.extraction.images import ImageExtractor
+            image_extractor = ImageExtractor(config.extraction, output_dir=doc_output_dir)
+        
+        # Charts/Visuals
+        visual_extractor = None
+        if config.extraction.charts_enabled:
+            from docuforge.src.extraction.visuals import VisualExtractor
+            visual_extractor = VisualExtractor(config.extraction, output_dir=doc_output_dir)
+        
+        # OCR (only if not 'off') - CORRECT: use 'enable' not 'mode'
+        smart_ocr = None
+        if config.ocr.enable != 'off':
+            from docuforge.src.ingestion.ocr import SmartOCR
+            smart_ocr = SmartOCR(config.ocr)
         
         chunk_md_content = []
         
@@ -124,9 +143,9 @@ class PipelineController:
                     # A. Zone Analysis
                     crop_box = zone_cleaner.get_crop_box(page)
 
-                    # B. Smart OCR / Text Extraction
+                    # B. Smart OCR / Text Extraction (if OCR is enabled)
                     raw_text_check = page.filter(lambda obj: obj["object_type"] == "char").extract_text() or ""
-                    ocr_text = smart_ocr.process_page(chunk.temp_path, i + 1, raw_text_check)
+                    ocr_text = smart_ocr.process_page(chunk.temp_path, i + 1, raw_text_check) if smart_ocr else None
                     
                     if ocr_text and ocr_text != raw_text_check:
                         # OCR Path
@@ -139,8 +158,8 @@ class PipelineController:
                     charts_md = []
                     ignore_regions = []
                     
-                    # C1. Try Neural-Spatial Engine First (if enabled)
-                    if config.extraction.use_neural_engine and config.extraction.tables_enabled:
+                    # C1. Try Neural-Spatial Engine First (if enabled and loaded)
+                    if neural_engine and config.extraction.use_neural_engine and config.extraction.tables_enabled:
                         try:
                             # Now returns table_bboxes as third value
                             neural_tables, neural_charts, table_bboxes = neural_engine.process_page(page, page_num)
@@ -160,7 +179,7 @@ class PipelineController:
                             logger.warning(f"Page {page_num}: Neural engine failed, falling back: {e}")
                     
                     # C2. Fallback to Legacy Extractor (if Neural found nothing or is disabled)
-                    if not tables_md and config.extraction.neural_fallback_to_legacy:
+                    if table_extractor and not tables_md and config.extraction.neural_fallback_to_legacy:
                         legacy_tables = table_extractor.extract_tables(chunk.temp_path, i + 1, page)
                         tables_md.extend(legacy_tables)
 
@@ -169,11 +188,11 @@ class PipelineController:
                     structured_text = structure_extractor.extract_text_with_structure(page, crop_box, ignore_regions)
                     clean_text = text_cleaner.clean_text(structured_text)
                     
-                    # C3. Image Extraction
-                    images_md = image_extractor.extract_images(chunk.temp_path, i + 1)
+                    # C3. Image Extraction (if enabled)
+                    images_md = image_extractor.extract_images(chunk.temp_path, i + 1) if image_extractor else []
                     
-                    # C4. Chart Extraction (legacy visual extractor)
-                    if config.extraction.charts_enabled and not charts_md:
+                    # C4. Chart Extraction (legacy visual extractor, if enabled and loaded)
+                    if visual_extractor and config.extraction.charts_enabled and not charts_md:
                         chart_results = visual_extractor.extract_visuals(chunk.temp_path, i + 1)
                         charts_md.extend([link for link, bbox in chart_results])
 
