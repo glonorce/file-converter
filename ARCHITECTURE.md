@@ -1,7 +1,6 @@
 # DocuForge Mimari Referansı (TR)
 
 ## Genel Bakış
-## Genel Bakış
 DocuForge; PDF belgelerini yapay zeka (LLM) uyumlu, sürüm kontrolüne uygun (Git) ve temiz bilgi içeren Markdown formatına dönüştürmek için tasarlanmış modern bir ETL hattıdır. Tüm işlemler yerel (Local) olarak gerçekleştirilir, gizliliği korur.
 
 ## 1. Sistem Çekirdeği
@@ -47,7 +46,6 @@ DocuForge; PDF belgelerini yapay zeka (LLM) uyumlu, sürüm kontrolüne uygun (G
 
 # DocuForge Architecture Reference (EN)
 
-## Overview
 ## Overview
 DocuForge is a modern ETL pipeline designed to convert complex PDFs into AI-ready (LLM), version-controllable (Git), and strictly clean Markdown. It prioritizes 100% data privacy by processing everything locally.
 
