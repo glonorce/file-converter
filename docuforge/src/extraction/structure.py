@@ -114,11 +114,12 @@ class StructureExtractor:
 
     def _filter_watermark_chars(self, chars: List[Dict]) -> List[Dict]:
         """
-        Filter out watermark characters based on font size difference.
+        Filter out watermark characters based on font size AND tag matching.
         
-        Watermarks like "Machine Translated by Google" often have a different
-        font size than the main text. If chars with different sizes are mixed
-        on the same line, we keep only the dominant (most common) font size.
+        SAFE APPROACH:
+        1. Find minority font chars (different size than dominant)
+        2. Check if minority chars form a watermark pattern (from user tags)
+        3. Only remove if pattern matches - preserves important emphasized text
         """
         if len(chars) < 5:
             return chars
@@ -133,16 +134,51 @@ class StructureExtractor:
         size_counts = Counter(sizes)
         dominant_size, dominant_count = size_counts.most_common(1)[0]
         
-        # If dominant size is >60% of chars, filter out other sizes
-        if dominant_count > len(chars) * 0.6:
-            # Keep chars within 15% of dominant size
-            tolerance = dominant_size * 0.15
-            filtered = [c for c in chars if abs(round(c.get('size', dominant_size), 1) - dominant_size) <= tolerance]
-            
-            # Only use filtered if we kept most chars
-            if len(filtered) > len(chars) * 0.5:
-                return filtered
+        # If no clear dominant (>60%), don't filter
+        if dominant_count <= len(chars) * 0.6:
+            return chars
         
+        # Separate dominant and minority chars
+        tolerance = dominant_size * 0.15
+        minority_chars = [c for c in chars if abs(round(c.get('size', dominant_size), 1) - dominant_size) > tolerance]
+        
+        # If no minority chars, nothing to filter
+        if not minority_chars:
+            return chars
+        
+        # Get watermark tags from user config
+        try:
+            from docuforge.src.core.tag_manager import TagManager
+            user_tags = TagManager().load_user_tags()
+        except:
+            user_tags = set()
+        
+        # If no tags defined, DON'T filter (safe default - preserves all text)
+        if not user_tags:
+            return chars
+        
+        # Build text from minority chars
+        minority_text = ''.join([c.get('text', '') for c in minority_chars]).strip()
+        
+        # Check if minority text matches any watermark tag
+        import re
+        is_watermark = False
+        for tag in user_tags:
+            # Normalize both for comparison (remove spaces, lowercase)
+            tag_normalized = re.sub(r'\s+', '', tag.lower())
+            minority_normalized = re.sub(r'\s+', '', minority_text.lower())
+            
+            # Check if tag appears in minority text
+            if tag_normalized in minority_normalized or minority_normalized in tag_normalized:
+                is_watermark = True
+                break
+        
+        # Only filter if minority matches a watermark tag
+        if is_watermark:
+            dominant_chars = [c for c in chars if abs(round(c.get('size', dominant_size), 1) - dominant_size) <= tolerance]
+            return dominant_chars if len(dominant_chars) > len(chars) * 0.5 else chars
+        
+        # Not a watermark - keep all chars (including emphasized text)
         return chars
 
     def _process_line_chars(self, chars: List[Dict]) -> Dict[str, Any]:
