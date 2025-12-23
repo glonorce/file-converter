@@ -473,10 +473,12 @@ class SmartOCR:
         if len(stripped_text) < 50:
             return self._run_ocr(pdf_path, page_num)
         
-        # 3. Merged words (no spaces)
+        # 3. Merged words (no spaces) - only trigger if really merged
+        # Note: 5% was too aggressive - TOC pages with dots (......) have ~4.6% space ratio
+        # Lowered to 2% to avoid false positives on valid text
         if len(stripped_text) >= 50:
             space_ratio = stripped_text.count(' ') / len(stripped_text)
-            if space_ratio < 0.05:
+            if space_ratio < 0.02:  # Was 0.05, caused false triggers on TOC pages
                 return self._run_ocr(pdf_path, page_num)
 
         return original_text
@@ -525,7 +527,7 @@ class SmartOCR:
             return True
         if len(stripped) >= 50:
             space_ratio = stripped.count(' ') / len(stripped)
-            if space_ratio < 0.05:
+            if space_ratio < 0.02:  # Was 0.05, lowered to avoid false triggers
                 return True
         return False
 
