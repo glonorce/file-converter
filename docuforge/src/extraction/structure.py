@@ -97,16 +97,53 @@ class StructureExtractor:
             # New Line Detection
             if abs(char_y - current_y) > y_tolerance:
                 if current_line_chars:
-                    reconstructed_lines.append(self._process_line_chars(current_line_chars))
+                    # Filter watermark chars before processing
+                    filtered_chars = self._filter_watermark_chars(current_line_chars)
+                    reconstructed_lines.append(self._process_line_chars(filtered_chars))
                 current_line_chars = []
                 current_y = char_y
             
             current_line_chars.append(char)
 
         if current_line_chars:
-            reconstructed_lines.append(self._process_line_chars(current_line_chars))
+            # Filter watermark chars before processing
+            filtered_chars = self._filter_watermark_chars(current_line_chars)
+            reconstructed_lines.append(self._process_line_chars(filtered_chars))
             
         return reconstructed_lines
+
+    def _filter_watermark_chars(self, chars: List[Dict]) -> List[Dict]:
+        """
+        Filter out watermark characters based on font size difference.
+        
+        Watermarks like "Machine Translated by Google" often have a different
+        font size than the main text. If chars with different sizes are mixed
+        on the same line, we keep only the dominant (most common) font size.
+        """
+        if len(chars) < 5:
+            return chars
+        
+        # Get font sizes (rounded to 1 decimal)
+        sizes = [round(c.get('size', 10), 1) for c in chars]
+        if not sizes:
+            return chars
+        
+        # Find dominant font size (most common)
+        from collections import Counter
+        size_counts = Counter(sizes)
+        dominant_size, dominant_count = size_counts.most_common(1)[0]
+        
+        # If dominant size is >60% of chars, filter out other sizes
+        if dominant_count > len(chars) * 0.6:
+            # Keep chars within 15% of dominant size
+            tolerance = dominant_size * 0.15
+            filtered = [c for c in chars if abs(round(c.get('size', dominant_size), 1) - dominant_size) <= tolerance]
+            
+            # Only use filtered if we kept most chars
+            if len(filtered) > len(chars) * 0.5:
+                return filtered
+        
+        return chars
 
     def _process_line_chars(self, chars: List[Dict]) -> Dict[str, Any]:
         """Merges characters in a line into words based on distance."""
